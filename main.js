@@ -21,6 +21,7 @@
 
   // Active selection for keyboard shortcuts
   let activeTaskId = null;
+  let pendingEditTaskId = null; // if set, render() will auto-open text editor for that task
 
   // Drag state
   let dragCtx = null; // { draggedId, parentPath, dateKey }
@@ -269,6 +270,26 @@
       frag.appendChild(renderTaskItem(state.tasks[i], [], i, 0));
     }
     outlineEl.appendChild(frag);
+
+    // After DOM is built, auto-enter edit mode for newly created tasks
+    if (pendingEditTaskId) {
+      const id = pendingEditTaskId;
+      pendingEditTaskId = null;
+
+      // Wait one frame so layout is stable
+      requestAnimationFrame(() => {
+        const li = document.querySelector(`li.task-item[data-task-id="${CSS.escape(id)}"]`);
+        if (!li) return;
+
+        const textEl = li.querySelector(".task-text");
+        if (!textEl) return;
+
+        const info = findTaskInfoById(id);
+        if (!info) return;
+
+        startInlineTextEdit(textEl, info.task);
+      });
+    }
   }
 
   function renderTaskItem(task, parentPath, index, depth) {
@@ -284,11 +305,13 @@
       activeTaskId = task.id;
     });
 
-    // Caret (left of marker)
+    // Caret
     const caret = document.createElement("button");
     caret.type = "button";
     caret.className = "caret" + (task.subtasks.length ? "" : " hidden");
-    caret.textContent = task.subtasks.length ? (task.collapsed ? "▶" : "▼") : "";
+    caret.textContent = task.subtasks.length
+      ? (task.collapsed ? "▶" : "▼")
+      : "";
     caret.addEventListener("click", (e) => {
       e.stopPropagation();
       if (!task.subtasks.length) return;
@@ -297,12 +320,12 @@
       render();
     });
 
-    // Marker (our numbering)
+    // Marker (1, A, i, a, ...)
     const marker = document.createElement("span");
     marker.className = "marker";
     marker.textContent = markerFor(depth, index);
 
-    // Date (only render if not null)
+    // Date (only if present)
     let dateSpan = null;
     if (task.date) {
       dateSpan = document.createElement("span");
@@ -315,15 +338,34 @@
       });
     }
 
-    // Text
+    // Text (with placeholder if empty)
     const textSpan = document.createElement("span");
     textSpan.className = "task-text";
-    textSpan.textContent = task.text || "";
     textSpan.title = "Click to edit text";
-    textSpan.addEventListener("click", (e) => {
+
+    if ((task.text || "").trim() === "") {
+      textSpan.textContent = "(click to edit)";
+      textSpan.dataset.placeholder = "1";
+    } else {
+      textSpan.textContent = task.text;
+    }
+
+    addSubBtn.addEventListener("click", (e) => {
       e.stopPropagation();
-      startInlineTextEdit(textSpan, task);
+
+      const newTask = makeNewTask(null, "");
+      task.subtasks.push(newTask);
+      task.collapsed = false;
+
+      sortAllArraysRecursively(state.tasks);
+      save();
+
+      activeTaskId = newTask.id;
+      pendingEditTaskId = newTask.id; // <-- NEW
+
+      render();
     });
+
 
     // Actions (hover)
     const actions = document.createElement("span");
@@ -341,24 +383,20 @@
       render();
     });
 
-    // NEW: Set/Remove date toggle (no keyboard shortcut)
     const dateToggleBtn = document.createElement("button");
     dateToggleBtn.type = "button";
     dateToggleBtn.textContent = task.date ? "Remove Date" : "Set Date";
     dateToggleBtn.addEventListener("click", (e) => {
       e.stopPropagation();
-
-    if (task.date) {
-      // remove date
-      task.date = null;
-      sortAllArraysRecursively(state.tasks);
-      enforceGroupOrderingInArray(state.tasks);
-      save();
-      render();
-    } else {
-      // set date (open picker)
-      startInlineDateSetFromButton(task);
-    }
+      if (task.date) {
+        task.date = null;
+        sortAllArraysRecursively(state.tasks);
+        enforceGroupOrderingInArray(state.tasks);
+        save();
+        render();
+      } else {
+        startInlineDateSetFromButton(task);
+      }
     });
 
     const delBtn = document.createElement("button");
@@ -373,18 +411,19 @@
     actions.appendChild(dateToggleBtn);
     actions.appendChild(delBtn);
 
-
     row.appendChild(caret);
     row.appendChild(marker);
     if (dateSpan) row.appendChild(dateSpan);
     row.appendChild(textSpan);
     row.appendChild(actions);
 
-    // Subtasks list
+    // Subtasks
     const subOl = document.createElement("ol");
     subOl.className = levelClassForDepth(depth + 1);
     for (let j = 0; j < task.subtasks.length; j++) {
-      subOl.appendChild(renderTaskItem(task.subtasks[j], parentPath.concat(index), j, depth + 1));
+      subOl.appendChild(
+        renderTaskItem(task.subtasks[j], parentPath.concat(index), j, depth + 1)
+      );
     }
 
     li.appendChild(row);
@@ -395,42 +434,42 @@
     return li;
   }
 
-// Open a date picker from a hover button.
-// If browser supports showPicker(), it pops immediately; otherwise click will open it.
-function startInlineDateSetFromButton(task) {
-  const input = document.createElement("input");
-  input.type = "date";
-  input.value = "";
-  input.style.position = "fixed";
-  input.style.left = "-9999px";
-  input.style.top = "-9999px";
-  document.body.appendChild(input);
+  // Open a date picker from a hover button.
+  // If browser supports showPicker(), it pops immediately; otherwise click will open it.
+  function startInlineDateSetFromButton(task) {
+    const input = document.createElement("input");
+    input.type = "date";
+    input.value = "";
+    input.style.position = "fixed";
+    input.style.left = "-9999px";
+    input.style.top = "-9999px";
+    document.body.appendChild(input);
 
-  const cleanup = () => input.remove();
+    const cleanup = () => input.remove();
 
-  input.addEventListener("change", () => {
-    if (input.value && !isValidISODateString(input.value)) {
-      showError("Invalid date.");
+    input.addEventListener("change", () => {
+      if (input.value && !isValidISODateString(input.value)) {
+        showError("Invalid date.");
+        cleanup();
+        return;
+      }
+      task.date = normalizeDateInput(input.value);
+
+      // Date changed → resort/group
+      sortAllArraysRecursively(state.tasks);
+      enforceGroupOrderingInArray(state.tasks);
+
+      save();
+      render();
       cleanup();
-      return;
-    }
-    task.date = normalizeDateInput(input.value);
+    });
 
-    // Date changed → resort/group
-    sortAllArraysRecursively(state.tasks);
-    enforceGroupOrderingInArray(state.tasks);
+    input.addEventListener("blur", cleanup);
 
-    save();
-    render();
-    cleanup();
-  });
-
-  input.addEventListener("blur", cleanup);
-
-  // Trigger picker
-  input.showPicker?.();
-  input.click();
-}
+    // Trigger picker
+    input.showPicker?.();
+    input.click();
+  }
 
 
   // ----- Inline editing -----
@@ -438,7 +477,9 @@ function startInlineDateSetFromButton(task) {
     const input = document.createElement("span");
     input.className = "task-text";
     input.contentEditable = "true";
-    input.textContent = task.text || "";
+
+    const wasPlaceholder = textEl?.dataset?.placeholder === "1";
+    input.textContent = wasPlaceholder ? "" : (task.text || "");
 
     const commit = () => {
       task.text = input.textContent || "";
@@ -447,16 +488,22 @@ function startInlineDateSetFromButton(task) {
     };
 
     input.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") { e.preventDefault(); input.blur(); }
-      if (e.key === "Escape") { e.preventDefault(); render(); }
-      // Tab indent/outdent while editing: allow the global handler to manage
+      if (e.key === "Enter") {
+        e.preventDefault();
+        input.blur();
+      }
+      if (e.key === "Escape") {
+        e.preventDefault();
+        render();
+      }
     });
+
     input.addEventListener("blur", commit);
 
     textEl.replaceWith(input);
     input.focus();
 
-    // cursor to end
+    // Place cursor at end
     const range = document.createRange();
     range.selectNodeContents(input);
     range.collapse(false);
@@ -464,6 +511,7 @@ function startInlineDateSetFromButton(task) {
     sel.removeAllRanges();
     sel.addRange(range);
   }
+
 
   function startInlineDateEdit(dateEl, task) {
     const input = document.createElement("input");
@@ -715,16 +763,19 @@ function startInlineDateSetFromButton(task) {
     const info = findTaskInfoById(activeTaskId);
     if (!info) return;
 
-    const { task, index, parentPath, arr } = info;
+    const { task, index, arr } = info;
+
+    // Inherit the date (your preferred behavior)
     const newTask = makeNewTask(task.date, "");
     arr.splice(index + 1, 0, newTask);
 
-    // Keep date groups ordered but allow manual order in same group
     enforceGroupOrderingInArray(arr);
-
     save();
-    render();
+
     activeTaskId = newTask.id;
+    pendingEditTaskId = newTask.id; // <-- NEW
+
+    render();
   }
 
   function indentActive() {

@@ -233,3 +233,8 @@ ol.level-6 { margin-left: 7.5em; }
 
 .main-header { margin-bottom: 10px; }
 .main-title { margin: 0; }
+
+.task-text[data-placeholder="1"]{
+  color: rgba(0,255,255,.45);
+  font-style: italic;
+}

@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>My To-Do List</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <main class="main">
+    <ol id="outline" class="outline-root"></ol>
+  </main>
+
+  <aside class="sidebar">
+    <h1>My To-Do List</h1>
+
+    <div class="controls">
+      <button id="expandAllBtn" type="button">Expand All</button>
+      <button id="collapseAllBtn" type="button">Collapse All</button>
+    </div>
+
+    <form id="addRootForm" class="controls">
+      <input id="rootText" type="text" placeholder="Add Task" maxlength="2000" required />
+      <input id="rootDate" type="date" />
+      <button id="addTaskBtn" type="submit">Add Task</button>
+    </form>
+
+    <div class="controls">
+      <button id="exportBtn" type="button">Export JSON</button>
+      <button id="importBtn" type="button">Import JSON</button>
+      <input id="importInput" type="file" accept="application/json" hidden />
+      <label class="merge-toggle" title="If on, imported tasks are appended. If off, import replaces everything.">
+        <input id="mergeImport" type="checkbox" />
+        Merge
+      </label>
+    </div>
+
+    <div class="help">
+      <div class="help-title">Shortcuts</div>
+      <div><span class="kbd">Enter</span> new sibling</div>
+      <div><span class="kbd">Tab</span> indent</div>
+      <div><span class="kbd">Shift</span>+<span class="kbd">Tab</span> outdent</div>
+      <div><span class="kbd">←/→</span> collapse/expand (when applicable)</div>
+    </div>
+
+    <div id="status" aria-live="polite"></div>
+  </aside>
+
+  <script src="main.js"></script>
+</body>
+</html>

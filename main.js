@@ -19,6 +19,11 @@
   const expandAllBtn = document.getElementById("expandAllBtn");
   const collapseAllBtn = document.getElementById("collapseAllBtn");
 
+  if (!outlineEl) {
+  console.error("Missing #outline element. index.html may not be loaded correctly.");
+  return;
+}
+
   // Active selection for keyboard shortcuts
   let activeTaskId = null;
   let pendingEditTaskId = null; // if set, render() will auto-open text editor for that task
@@ -309,9 +314,7 @@
     const caret = document.createElement("button");
     caret.type = "button";
     caret.className = "caret" + (task.subtasks.length ? "" : " hidden");
-    caret.textContent = task.subtasks.length
-      ? (task.collapsed ? "▶" : "▼")
-      : "";
+    caret.textContent = task.subtasks.length ? (task.collapsed ? "▶" : "▼") : "";
     caret.addEventListener("click", (e) => {
       e.stopPropagation();
       if (!task.subtasks.length) return;
@@ -338,18 +341,28 @@
       });
     }
 
-    // Text (with placeholder if empty)
+    // Text (placeholder if empty)
     const textSpan = document.createElement("span");
     textSpan.className = "task-text";
     textSpan.title = "Click to edit text";
-
     if ((task.text || "").trim() === "") {
       textSpan.textContent = "(click to edit)";
       textSpan.dataset.placeholder = "1";
     } else {
       textSpan.textContent = task.text;
     }
+    textSpan.addEventListener("click", (e) => {
+      e.stopPropagation();
+      startInlineTextEdit(textSpan, task);
+    });
 
+    // Actions (hover)
+    const actions = document.createElement("span");
+    actions.className = "task-actions";
+
+    const addSubBtn = document.createElement("button");
+    addSubBtn.type = "button";
+    addSubBtn.textContent = "Add Subtask";
     addSubBtn.addEventListener("click", (e) => {
       e.stopPropagation();
 
@@ -361,25 +374,7 @@
       save();
 
       activeTaskId = newTask.id;
-      pendingEditTaskId = newTask.id; // <-- NEW
-
-      render();
-    });
-
-
-    // Actions (hover)
-    const actions = document.createElement("span");
-    actions.className = "task-actions";
-
-    const addSubBtn = document.createElement("button");
-    addSubBtn.type = "button";
-    addSubBtn.textContent = "Add Subtask";
-    addSubBtn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      task.subtasks.push(makeNewTask(null, ""));
-      task.collapsed = false;
-      sortAllArraysRecursively(state.tasks);
-      save();
+      pendingEditTaskId = newTask.id; // auto-edit after render
       render();
     });
 

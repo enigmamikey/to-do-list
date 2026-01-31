@@ -20,13 +20,17 @@
   const collapseAllBtn = document.getElementById("collapseAllBtn");
 
   if (!outlineEl) {
-  console.error("Missing #outline element. index.html may not be loaded correctly.");
-  return;
-}
+    console.error("Missing #outline element. index.html may not be loaded correctly.");
+    return;
+  }
 
   // Active selection for keyboard shortcuts
   let activeTaskId = null;
   let pendingEditTaskId = null; // if set, render() will auto-open text editor for that task
+
+  let currentEditingTaskId = null;
+  let queuedEditTaskId = null;
+
 
   // Drag state
   let dragCtx = null; // { draggedId, parentPath, dateKey }
@@ -306,9 +310,13 @@
 
     const row = document.createElement("div");
     row.className = "task-row";
-    row.addEventListener("mousedown", () => {
-      activeTaskId = task.id;
+    textSpan.addEventListener("mousedown", (e) => {
+      // If currently editing another task, queue this one so it opens after the blur+render
+      if (currentEditingTaskId && currentEditingTaskId !== task.id) {
+        queuedEditTaskId = task.id;
+      }
     });
+
 
     // Caret
     const caret = document.createElement("button");
@@ -466,47 +474,65 @@
     input.click();
   }
 
-
   // ----- Inline editing -----
-  function startInlineTextEdit(textEl, task) {
-    const input = document.createElement("span");
-    input.className = "task-text";
-    input.contentEditable = "true";
+    function startInlineTextEdit(textEl, task) {
+      currentEditingTaskId = task.id;
 
-    const wasPlaceholder = textEl?.dataset?.placeholder === "1";
-    input.textContent = wasPlaceholder ? "" : (task.text || "");
+      const input = document.createElement("span");
+      input.className = "task-text";
+      input.contentEditable = "true";
 
-    const commit = () => {
-      task.text = input.textContent || "";
-      save();
-      render();
-    };
+      const wasPlaceholder = textEl?.dataset?.placeholder === "1";
+      input.textContent = wasPlaceholder ? "" : (task.text || "");
 
-    input.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") {
-        e.preventDefault();
-        input.blur();
-      }
-      if (e.key === "Escape") {
-        e.preventDefault();
+      const commit = () => {
+        task.text = input.textContent || "";
+        currentEditingTaskId = null;
+
+        // If user clicked another task while editing, hop directly into it after render
+        const nextId = queuedEditTaskId;
+        queuedEditTaskId = null;
+
+        save();
         render();
-      }
-    });
 
-    input.addEventListener("blur", commit);
+        if (nextId) {
+          requestAnimationFrame(() => {
+            const li = document.querySelector(`li.task-item[data-task-id="${CSS.escape(nextId)}"]`);
+            if (!li) return;
+            const nextTextEl = li.querySelector(".task-text");
+            const info = findTaskInfoById(nextId);
+            if (nextTextEl && info) startInlineTextEdit(nextTextEl, info.task);
+          });
+        }
+      };
 
-    textEl.replaceWith(input);
-    input.focus();
+      input.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          input.blur();
+        }
+        if (e.key === "Escape") {
+          e.preventDefault();
+          currentEditingTaskId = null;
+          queuedEditTaskId = null;
+          render();
+        }
+      });
 
-    // Place cursor at end
-    const range = document.createRange();
-    range.selectNodeContents(input);
-    range.collapse(false);
-    const sel = window.getSelection();
-    sel.removeAllRanges();
-    sel.addRange(range);
-  }
+      input.addEventListener("blur", commit);
 
+      textEl.replaceWith(input);
+      input.focus();
+
+      // Place cursor at end
+      const range = document.createRange();
+      range.selectNodeContents(input);
+      range.collapse(false);
+      const sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(range);
+    }
 
   function startInlineDateEdit(dateEl, task) {
     const input = document.createElement("input");
@@ -565,18 +591,27 @@
   // ----- Drag & Drop (restricted: same parent + same date group) -----
   function attachDragHandlers(li, task, parentPath) {
     li.addEventListener("dragstart", (e) => {
+      e.stopPropagation(); // IMPORTANT: prevent parent <li> handlers from overwriting dragCtx
+
       li.classList.add("dragging");
+      document.body.classList.add("is-dragging"); // (for wishlist #3)
+
       dragCtx = {
         draggedId: task.id,
         parentPath: parentPath.slice(),
         dateKey: dateKeyForGrouping(task.date)
       };
+
       e.dataTransfer.effectAllowed = "move";
       e.dataTransfer.setData("text/plain", task.id);
     });
 
-    li.addEventListener("dragend", () => {
+    li.addEventListener("dragend", (e) => {
+      e.stopPropagation();
+
       li.classList.remove("dragging", "drag-over-top", "drag-over-bottom");
+      document.body.classList.remove("is-dragging"); // (for wishlist #3)
+
       delete li.dataset.dropPosition;
       dragCtx = null;
       clearDropIndicators();
@@ -584,13 +619,16 @@
 
     li.addEventListener("dragover", (e) => {
       if (!dragCtx) return;
+
       e.preventDefault();
+      e.stopPropagation();
 
       const ok = isDropAllowed(task, parentPath);
       if (!ok) return;
 
       const rect = li.getBoundingClientRect();
       const offset = e.clientY - rect.top;
+
       li.classList.remove("drag-over-top", "drag-over-bottom");
       if (offset < rect.height / 2) {
         li.classList.add("drag-over-top");
@@ -601,13 +639,16 @@
       }
     });
 
-    li.addEventListener("dragleave", () => {
+    li.addEventListener("dragleave", (e) => {
+      e.stopPropagation();
       li.classList.remove("drag-over-top", "drag-over-bottom");
       delete li.dataset.dropPosition;
     });
 
     li.addEventListener("drop", (e) => {
       e.preventDefault();
+      e.stopPropagation();
+
       if (!dragCtx) return;
 
       const ok = isDropAllowed(task, parentPath);
@@ -639,6 +680,7 @@
       render();
     });
   }
+
 
   function clearDropIndicators() {
     document.querySelectorAll(".drag-over-top,.drag-over-bottom")

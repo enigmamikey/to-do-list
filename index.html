@@ -3,17 +3,19 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>My To-Do List</title>
+  <title>To-Do List</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
   <main class="main">
+    <header class="main-header">
+      <h1 class="main-title">To-Do List</h1>
+    </header>
+
     <ol id="outline" class="outline-root"></ol>
   </main>
 
   <aside class="sidebar">
-    <h1>My To-Do List</h1>
-
     <div class="controls">
       <button id="expandAllBtn" type="button">Expand All</button>
       <button id="collapseAllBtn" type="button">Collapse All</button>
@@ -41,6 +43,7 @@
       <div><span class="kbd">Tab</span> indent</div>
       <div><span class="kbd">Shift</span>+<span class="kbd">Tab</span> outdent</div>
       <div><span class="kbd">←/→</span> collapse/expand (when applicable)</div>
+      <!-- Removed + / - hint -->
     </div>
 
     <div id="status" aria-live="polite"></div>

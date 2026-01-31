@@ -230,3 +230,6 @@ ol.level-6 { margin-left: 7.5em; }
 .drag-over-top{ border-top: 3px solid var(--cyan); }
 .drag-over-bottom{ border-bottom: 3px solid var(--cyan); }
 .dragging{ opacity: .55; }
+
+.main-header { margin-bottom: 10px; }
+.main-title { margin: 0; }

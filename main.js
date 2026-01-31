@@ -301,141 +301,148 @@
     }
   }
 
-  function renderTaskItem(task, parentPath, index, depth) {
-    const li = document.createElement("li");
-    li.className = "task-item";
-    li.dataset.taskId = task.id;
-    if (task.collapsed) li.classList.add("collapsed");
-    li.draggable = true;
+function renderTaskItem(task, parentPath, index, depth) {
+  const li = document.createElement("li");
+  li.className = "task-item";
+  li.dataset.taskId = task.id;
+  if (task.collapsed) li.classList.add("collapsed");
+  li.draggable = true;
 
-    const row = document.createElement("div");
-    row.className = "task-row";
-    textSpan.addEventListener("mousedown", (e) => {
-      // If currently editing another task, queue this one so it opens after the blur+render
+  const row = document.createElement("div");
+  row.className = "task-row";
+  row.addEventListener("mousedown", () => {
+    activeTaskId = task.id;
+  });
+
+  // Caret
+  const caret = document.createElement("button");
+  caret.type = "button";
+  caret.className = "caret" + (task.subtasks.length ? "" : " hidden");
+  caret.textContent = task.subtasks.length ? (task.collapsed ? "▶" : "▼") : "";
+  caret.addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (!task.subtasks.length) return;
+    task.collapsed = !task.collapsed;
+    save();
+    render();
+  });
+
+  // Marker
+  const marker = document.createElement("span");
+  marker.className = "marker";
+  marker.textContent = markerFor(depth, index);
+
+  // Date (only if present)
+  let dateSpan = null;
+  if (task.date) {
+    dateSpan = document.createElement("span");
+    dateSpan.className = "task-date";
+    dateSpan.textContent = formatDateForDisplay(task.date);
+    dateSpan.title = "Click to edit date";
+    dateSpan.addEventListener("click", (e) => {
+      e.stopPropagation();
+      startInlineDateEdit(dateSpan, task);
+    });
+  }
+
+  // Text (placeholder if empty)
+  const textSpan = document.createElement("span");
+  textSpan.className = "task-text";
+  textSpan.title = "Click to edit text";
+
+  if ((task.text || "").trim() === "") {
+    textSpan.textContent = "(click to edit)";
+    textSpan.dataset.placeholder = "1";
+  } else {
+    textSpan.textContent = task.text;
+  }
+
+  // If you're using the "one click to switch tasks while editing" feature,
+  // keep your mousedown queue logic here; otherwise omit.
+  if (typeof currentEditingTaskId !== "undefined") {
+    textSpan.addEventListener("mousedown", () => {
       if (currentEditingTaskId && currentEditingTaskId !== task.id) {
         queuedEditTaskId = task.id;
       }
     });
-
-
-    // Caret
-    const caret = document.createElement("button");
-    caret.type = "button";
-    caret.className = "caret" + (task.subtasks.length ? "" : " hidden");
-    caret.textContent = task.subtasks.length ? (task.collapsed ? "▶" : "▼") : "";
-    caret.addEventListener("click", (e) => {
-      e.stopPropagation();
-      if (!task.subtasks.length) return;
-      task.collapsed = !task.collapsed;
-      save();
-      render();
-    });
-
-    // Marker (1, A, i, a, ...)
-    const marker = document.createElement("span");
-    marker.className = "marker";
-    marker.textContent = markerFor(depth, index);
-
-    // Date (only if present)
-    let dateSpan = null;
-    if (task.date) {
-      dateSpan = document.createElement("span");
-      dateSpan.className = "task-date";
-      dateSpan.textContent = formatDateForDisplay(task.date);
-      dateSpan.title = "Click to edit date";
-      dateSpan.addEventListener("click", (e) => {
-        e.stopPropagation();
-        startInlineDateEdit(dateSpan, task);
-      });
-    }
-
-    // Text (placeholder if empty)
-    const textSpan = document.createElement("span");
-    textSpan.className = "task-text";
-    textSpan.title = "Click to edit text";
-    if ((task.text || "").trim() === "") {
-      textSpan.textContent = "(click to edit)";
-      textSpan.dataset.placeholder = "1";
-    } else {
-      textSpan.textContent = task.text;
-    }
-    textSpan.addEventListener("click", (e) => {
-      e.stopPropagation();
-      startInlineTextEdit(textSpan, task);
-    });
-
-    // Actions (hover)
-    const actions = document.createElement("span");
-    actions.className = "task-actions";
-
-    const addSubBtn = document.createElement("button");
-    addSubBtn.type = "button";
-    addSubBtn.textContent = "Add Subtask";
-    addSubBtn.addEventListener("click", (e) => {
-      e.stopPropagation();
-
-      const newTask = makeNewTask(null, "");
-      task.subtasks.push(newTask);
-      task.collapsed = false;
-
-      sortAllArraysRecursively(state.tasks);
-      save();
-
-      activeTaskId = newTask.id;
-      pendingEditTaskId = newTask.id; // auto-edit after render
-      render();
-    });
-
-    const dateToggleBtn = document.createElement("button");
-    dateToggleBtn.type = "button";
-    dateToggleBtn.textContent = task.date ? "Remove Date" : "Set Date";
-    dateToggleBtn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      if (task.date) {
-        task.date = null;
-        sortAllArraysRecursively(state.tasks);
-        enforceGroupOrderingInArray(state.tasks);
-        save();
-        render();
-      } else {
-        startInlineDateSetFromButton(task);
-      }
-    });
-
-    const delBtn = document.createElement("button");
-    delBtn.type = "button";
-    delBtn.textContent = "Delete";
-    delBtn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      deleteTask(task.id);
-    });
-
-    actions.appendChild(addSubBtn);
-    actions.appendChild(dateToggleBtn);
-    actions.appendChild(delBtn);
-
-    row.appendChild(caret);
-    row.appendChild(marker);
-    if (dateSpan) row.appendChild(dateSpan);
-    row.appendChild(textSpan);
-    row.appendChild(actions);
-
-    // Subtasks
-    const subOl = document.createElement("ol");
-    subOl.className = levelClassForDepth(depth + 1);
-    for (let j = 0; j < task.subtasks.length; j++) {
-      subOl.appendChild(
-        renderTaskItem(task.subtasks[j], parentPath.concat(index), j, depth + 1)
-      );
-    }
-
-    li.appendChild(row);
-    li.appendChild(subOl);
-
-    attachDragHandlers(li, task, parentPath);
-
-    return li;
   }
+
+  textSpan.addEventListener("click", (e) => {
+    e.stopPropagation();
+    startInlineTextEdit(textSpan, task);
+  });
+
+  // Actions
+  const actions = document.createElement("span");
+  actions.className = "task-actions";
+
+  const addSubBtn = document.createElement("button");
+  addSubBtn.type = "button";
+  addSubBtn.textContent = "Add Subtask";
+  addSubBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+
+    const newTask = makeNewTask(null, "");
+    task.subtasks.push(newTask);
+    task.collapsed = false;
+
+    sortAllArraysRecursively(state.tasks);
+    save();
+
+    activeTaskId = newTask.id;
+    pendingEditTaskId = newTask.id; // auto-edit after render
+    render();
+  });
+
+  const dateToggleBtn = document.createElement("button");
+  dateToggleBtn.type = "button";
+  dateToggleBtn.textContent = task.date ? "Remove Date" : "Set Date";
+  dateToggleBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (task.date) {
+      task.date = null;
+      sortAllArraysRecursively(state.tasks);
+      enforceGroupOrderingInArray(state.tasks);
+      save();
+      render();
+    } else {
+      startInlineDateSetFromButton(task);
+    }
+  });
+
+  const delBtn = document.createElement("button");
+  delBtn.type = "button";
+  delBtn.textContent = "Delete";
+  delBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    deleteTask(task.id);
+  });
+
+  actions.appendChild(addSubBtn);
+  actions.appendChild(dateToggleBtn);
+  actions.appendChild(delBtn);
+
+  row.appendChild(caret);
+  row.appendChild(marker);
+  if (dateSpan) row.appendChild(dateSpan);
+  row.appendChild(textSpan);
+  row.appendChild(actions);
+
+  // Subtasks
+  const subOl = document.createElement("ol");
+  subOl.className = levelClassForDepth(depth + 1);
+  for (let j = 0; j < task.subtasks.length; j++) {
+    subOl.appendChild(
+      renderTaskItem(task.subtasks[j], parentPath.concat(index), j, depth + 1)
+    );
+  }
+
+  li.appendChild(row);
+  li.appendChild(subOl);
+
+  attachDragHandlers(li, task, parentPath);
+  return li;
+}
 
   // Open a date picker from a hover button.
   // If browser supports showPicker(), it pops immediately; otherwise click will open it.

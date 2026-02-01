@@ -314,7 +314,7 @@ function renderTaskItem(task, parentPath, index, depth) {
     activeTaskId = task.id;
   });
 
-  // Caret
+  // Caret (left of marker)
   const caret = document.createElement("button");
   caret.type = "button";
   caret.className = "caret" + (task.subtasks.length ? "" : " hidden");
@@ -327,7 +327,7 @@ function renderTaskItem(task, parentPath, index, depth) {
     render();
   });
 
-  // Marker
+  // Marker (1, A, i, a, ...)
   const marker = document.createElement("span");
   marker.className = "marker";
   marker.textContent = markerFor(depth, index);
@@ -357,22 +357,21 @@ function renderTaskItem(task, parentPath, index, depth) {
     textSpan.textContent = task.text;
   }
 
-  // If you're using the "one click to switch tasks while editing" feature,
-  // keep your mousedown queue logic here; otherwise omit.
-  if (typeof currentEditingTaskId !== "undefined") {
-    textSpan.addEventListener("mousedown", () => {
+  // One-click switch: if editing another task, queue this one so it opens after blur+render
+  textSpan.addEventListener("mousedown", () => {
+    if (typeof currentEditingTaskId !== "undefined") {
       if (currentEditingTaskId && currentEditingTaskId !== task.id) {
         queuedEditTaskId = task.id;
       }
-    });
-  }
+    }
+  });
 
   textSpan.addEventListener("click", (e) => {
     e.stopPropagation();
     startInlineTextEdit(textSpan, task);
   });
 
-  // Actions
+  // Actions (hover)
   const actions = document.createElement("span");
   actions.className = "task-actions";
 
@@ -390,7 +389,7 @@ function renderTaskItem(task, parentPath, index, depth) {
     save();
 
     activeTaskId = newTask.id;
-    pendingEditTaskId = newTask.id; // auto-edit after render
+    pendingEditTaskId = newTask.id; // auto-enter edit mode after render
     render();
   });
 
@@ -422,13 +421,14 @@ function renderTaskItem(task, parentPath, index, depth) {
   actions.appendChild(dateToggleBtn);
   actions.appendChild(delBtn);
 
+  // Assemble row
   row.appendChild(caret);
   row.appendChild(marker);
   if (dateSpan) row.appendChild(dateSpan);
   row.appendChild(textSpan);
   row.appendChild(actions);
 
-  // Subtasks
+  // Subtasks list
   const subOl = document.createElement("ol");
   subOl.className = levelClassForDepth(depth + 1);
   for (let j = 0; j < task.subtasks.length; j++) {
@@ -441,45 +441,102 @@ function renderTaskItem(task, parentPath, index, depth) {
   li.appendChild(subOl);
 
   attachDragHandlers(li, task, parentPath);
+
   return li;
 }
 
   // Open a date picker from a hover button.
   // If browser supports showPicker(), it pops immediately; otherwise click will open it.
-  function startInlineDateSetFromButton(task) {
-    const input = document.createElement("input");
-    input.type = "date";
-    input.value = "";
-    input.style.position = "fixed";
-    input.style.left = "-9999px";
-    input.style.top = "-9999px";
-    document.body.appendChild(input);
+function startInlineTextEdit(textEl, task) {
+  currentEditingTaskId = task.id;
 
-    const cleanup = () => input.remove();
+  const input = document.createElement("span");
+  input.className = "task-text";
+  input.contentEditable = "true";
 
-    input.addEventListener("change", () => {
-      if (input.value && !isValidISODateString(input.value)) {
-        showError("Invalid date.");
-        cleanup();
-        return;
-      }
-      task.date = normalizeDateInput(input.value);
+  const wasPlaceholder = textEl?.dataset?.placeholder === "1";
+  input.textContent = wasPlaceholder ? "" : (task.text || "");
 
-      // Date changed → resort/group
-      sortAllArraysRecursively(state.tasks);
-      enforceGroupOrderingInArray(state.tasks);
+  const commitOnly = () => {
+    task.text = input.textContent || "";
+  };
+
+  const commitAndRender = () => {
+    commitOnly();
+    currentEditingTaskId = null;
+
+    const nextId = queuedEditTaskId;
+    queuedEditTaskId = null;
+
+    save();
+    render();
+
+    if (nextId) {
+      requestAnimationFrame(() => {
+        const li = document.querySelector(
+          `li.task-item[data-task-id="${CSS.escape(nextId)}"]`
+        );
+        if (!li) return;
+        const nextTextEl = li.querySelector(".task-text");
+        const info = findTaskInfoById(nextId);
+        if (nextTextEl && info) startInlineTextEdit(nextTextEl, info.task);
+      });
+    }
+  };
+
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      e.stopPropagation();
+      input.blur();
+      return;
+    }
+
+    if (e.key === "Tab") {
+      // THIS is the key change: handle Tab here, stop it from reaching document handler,
+      // and re-open edit mode after indent/outdent.
+      e.preventDefault();
+      e.stopPropagation();
+
+      commitOnly();
+
+      // Use your existing indent/outdent functions by setting activeTaskId
+      activeTaskId = task.id;
+
+      if (e.shiftKey) outdentActive();
+      else indentActive();
+
+      // Re-enter edit mode on the same task after the structural render
+      pendingEditTaskId = task.id;
 
       save();
       render();
-      cleanup();
-    });
+      return;
+    }
 
-    input.addEventListener("blur", cleanup);
+    if (e.key === "Escape") {
+      e.preventDefault();
+      e.stopPropagation();
+      currentEditingTaskId = null;
+      queuedEditTaskId = null;
+      render();
+    }
+  });
 
-    // Trigger picker
-    input.showPicker?.();
-    input.click();
-  }
+  input.addEventListener("blur", commitAndRender);
+
+  textEl.replaceWith(input);
+  input.focus();
+
+  // Place cursor at end
+  const range = document.createRange();
+  range.selectNodeContents(input);
+  range.collapse(false);
+  const sel = window.getSelection();
+  sel.removeAllRanges();
+  sel.addRange(range);
+}
+
 
   // ----- Inline editing -----
   function startInlineTextEdit(textEl, task) {

@@ -578,18 +578,25 @@ input.addEventListener("keydown", (e) => {
     return;
   }
 
-  if (e.key === "Tab") {
-    e.preventDefault();
-    currentEditingTaskId = null;
-    queuedEditTaskId = null;
+if (e.key === "Tab") {
+  e.preventDefault();
+  e.stopPropagation();
 
-    if (e.shiftKey) {
-      indentOutdentWhileEditing(task, "outdent");
-    } else {
-      indentOutdentWhileEditing(task, "indent");
-    }
-    return;
-  }
+  // Save current text into the task before moving it
+  task.text = input.textContent || "";
+
+  const ok = e.shiftKey
+    ? outdentByIdNoRender(task.id)
+    : indentByIdNoRender(task.id);
+
+  // Even if move not possible, keep editing the same task
+  pendingEditTaskId = task.id;
+
+  save();
+  render();
+  return;
+}
+
 
   if (e.key === "Escape") {
     e.preventDefault(); 
@@ -952,6 +959,39 @@ input.addEventListener("keydown", (e) => {
     save();
     render();
   }
+
+function indentByIdNoRender(taskId) {
+  const info = findTaskInfoById(taskId);
+  if (!info) return false;
+
+  const { task, index, arr } = info;
+  if (index === 0) return false; // can't indent first item
+
+  const prev = arr[index - 1];
+  arr.splice(index, 1);
+  prev.subtasks.push(task);
+  prev.collapsed = false;
+  return true;
+}
+
+function outdentByIdNoRender(taskId) {
+  const info = findTaskInfoById(taskId);
+  if (!info) return false;
+
+  const { task, index, parentPath } = info;
+  if (parentPath.length === 0) return false; // already root
+
+  const parentIndex = parentPath[parentPath.length - 1];
+  const grandParentPath = parentPath.slice(0, -1);
+  const grandArr = getArrayByParentPath(grandParentPath);
+  const parentTask = grandArr[parentIndex];
+
+  parentTask.subtasks.splice(index, 1);
+  grandArr.splice(parentIndex + 1, 0, task);
+
+  enforceGroupOrderingInArray(grandArr);
+  return true;
+}
 
   function collapseActive() {
     const info = findTaskInfoById(activeTaskId);

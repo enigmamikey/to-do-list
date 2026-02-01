@@ -482,64 +482,80 @@ function renderTaskItem(task, parentPath, index, depth) {
   }
 
   // ----- Inline editing -----
-    function startInlineTextEdit(textEl, task) {
-      currentEditingTaskId = task.id;
+  function startInlineTextEdit(textEl, task) {
+    currentEditingTaskId = task.id;
 
-      const input = document.createElement("span");
-      input.className = "task-text";
-      input.contentEditable = "true";
+    const input = document.createElement("span");
+    input.className = "task-text";
+    input.contentEditable = "true";
 
-      const wasPlaceholder = textEl?.dataset?.placeholder === "1";
-      input.textContent = wasPlaceholder ? "" : (task.text || "");
+    const wasPlaceholder = textEl?.dataset?.placeholder === "1";
+    input.textContent = wasPlaceholder ? "" : (task.text || "");
 
-      const commit = () => {
-        task.text = input.textContent || "";
-        currentEditingTaskId = null;
+    const commit = () => {
+      task.text = input.textContent || "";
+      currentEditingTaskId = null;
 
-        // If user clicked another task while editing, hop directly into it after render
-        const nextId = queuedEditTaskId;
-        queuedEditTaskId = null;
+      // If user clicked another task while editing, hop directly into it after render
+      const nextId = queuedEditTaskId;
+      queuedEditTaskId = null;
 
-        save();
-        render();
+      save();
+      render();
 
-        if (nextId) {
-          requestAnimationFrame(() => {
-            const li = document.querySelector(`li.task-item[data-task-id="${CSS.escape(nextId)}"]`);
-            if (!li) return;
-            const nextTextEl = li.querySelector(".task-text");
-            const info = findTaskInfoById(nextId);
-            if (nextTextEl && info) startInlineTextEdit(nextTextEl, info.task);
-          });
-        }
-      };
+      if (nextId) {
+        requestAnimationFrame(() => {
+          const li = document.querySelector(`li.task-item[data-task-id="${CSS.escape(nextId)}"]`);
+          if (!li) return;
+          const nextTextEl = li.querySelector(".task-text");
+          const info = findTaskInfoById(nextId);
+          if (nextTextEl && info) startInlineTextEdit(nextTextEl, info.task);
+        });
+      }
+    };
 
-      input.addEventListener("keydown", (e) => {
-        if (e.key === "Enter") {
-          e.preventDefault();
-          input.blur();
-        }
-        if (e.key === "Escape") {
-          e.preventDefault();
-          currentEditingTaskId = null;
-          queuedEditTaskId = null;
-          render();
-        }
-      });
+input.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") {
+    e.preventDefault();
+    input.blur();
+    return;
+  }
 
-      input.addEventListener("blur", commit);
+  if (e.key === "Tab") {
+    e.preventDefault();
+    currentEditingTaskId = null;
+    queuedEditTaskId = null;
 
-      textEl.replaceWith(input);
-      input.focus();
-
-      // Place cursor at end
-      const range = document.createRange();
-      range.selectNodeContents(input);
-      range.collapse(false);
-      const sel = window.getSelection();
-      sel.removeAllRanges();
-      sel.addRange(range);
+    if (e.shiftKey) {
+      indentOutdentWhileEditing(task, "outdent");
+    } else {
+      indentOutdentWhileEditing(task, "indent");
     }
+    return;
+  }
+
+  if (e.key === "Escape") {
+    e.preventDefault(); 
+    currentEditingTaskId = null;
+    queuedEditTaskId = null;
+    render();
+  }
+});
+
+
+    input.addEventListener("blur", commit);
+
+    textEl.replaceWith(input);
+    input.focus();
+
+    // Place cursor at end
+    const range = document.createRange();
+    range.selectNodeContents(input);
+    range.collapse(false);
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+  }
 
   function startInlineDateEdit(dateEl, task) {
     const input = document.createElement("input");
@@ -821,6 +837,21 @@ function renderTaskItem(task, parentPath, index, depth) {
 
     render();
   }
+
+  function indentOutdentWhileEditing(task, direction) {
+  const info = findTaskInfoById(task.id);
+  if (!info) return;
+
+  if (direction === "indent") {
+    indentActiveTask(task.id);
+  } else {
+    outdentActiveTask(task.id);
+  }
+
+  // After structure change + render, re-enter edit mode
+  pendingEditTaskId = task.id;
+  render();
+}
 
   function indentActive() {
     const info = findTaskInfoById(activeTaskId);

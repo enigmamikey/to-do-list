@@ -236,6 +236,13 @@
     return { id: uid(), date: date, text: text || "", subtasks: [], collapsed: false };
   }
 
+  function deepCopyTask(task) {
+    const copy = makeNewTask(task.date, task.text);
+    copy.collapsed = task.collapsed;
+    copy.subtasks = task.subtasks.map(st => deepCopyTask(st));
+    return copy;
+  }
+
   // ----- Expand/Collapse All -----
   function setAllCollapsed(tasks, collapsed) {
     for (const t of tasks) {
@@ -375,6 +382,7 @@ function renderTaskItem(task, parentPath, index, depth) {
   const actions = document.createElement("span");
   actions.className = "task-actions";
 
+  // Add Subtask (auto-enter edit on new subtask)
   const addSubBtn = document.createElement("button");
   addSubBtn.type = "button";
   addSubBtn.textContent = "Add Subtask";
@@ -389,10 +397,34 @@ function renderTaskItem(task, parentPath, index, depth) {
     save();
 
     activeTaskId = newTask.id;
-    pendingEditTaskId = newTask.id; // auto-enter edit mode after render
+    pendingEditTaskId = newTask.id; // auto-enter edit after render
     render();
   });
 
+  // Copy Task (deep copy incl. date + subtasks; new IDs; no auto-edit)
+  const copyBtn = document.createElement("button");
+  copyBtn.type = "button";
+  copyBtn.textContent = "Copy Task";
+  copyBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+
+    const info = findTaskInfoById(task.id);
+    if (!info) return;
+
+    const { arr, index: idx } = info;
+    const copied = deepCopyTask(task);
+
+    // Insert immediately after the original (same parent array)
+    arr.splice(idx + 1, 0, copied);
+
+    // Keep date groups ordered; preserve order within group
+    enforceGroupOrderingInArray(arr);
+
+    save();
+    render();
+  });
+
+  // Set/Remove Date toggle
   const dateToggleBtn = document.createElement("button");
   dateToggleBtn.type = "button";
   dateToggleBtn.textContent = task.date ? "Remove Date" : "Set Date";
@@ -409,6 +441,7 @@ function renderTaskItem(task, parentPath, index, depth) {
     }
   });
 
+  // Delete
   const delBtn = document.createElement("button");
   delBtn.type = "button";
   delBtn.textContent = "Delete";
@@ -417,7 +450,9 @@ function renderTaskItem(task, parentPath, index, depth) {
     deleteTask(task.id);
   });
 
+  // Append actions in a sensible order
   actions.appendChild(addSubBtn);
+  actions.appendChild(copyBtn);
   actions.appendChild(dateToggleBtn);
   actions.appendChild(delBtn);
 
@@ -440,6 +475,7 @@ function renderTaskItem(task, parentPath, index, depth) {
   li.appendChild(row);
   li.appendChild(subOl);
 
+  // Drag/drop
   attachDragHandlers(li, task, parentPath);
 
   return li;

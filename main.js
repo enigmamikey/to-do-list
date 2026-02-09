@@ -321,7 +321,7 @@ function renderTaskItem(task, parentPath, index, depth) {
     activeTaskId = task.id;
   });
 
-  // Caret (left of marker)
+  // Caret
   const caret = document.createElement("button");
   caret.type = "button";
   caret.className = "caret" + (task.subtasks.length ? "" : " hidden");
@@ -334,7 +334,7 @@ function renderTaskItem(task, parentPath, index, depth) {
     render();
   });
 
-  // Marker (1, A, i, a, ...)
+  // Marker
   const marker = document.createElement("span");
   marker.className = "marker";
   marker.textContent = markerFor(depth, index);
@@ -356,7 +356,6 @@ function renderTaskItem(task, parentPath, index, depth) {
   const textSpan = document.createElement("span");
   textSpan.className = "task-text";
   textSpan.title = "Click to edit text";
-
   if ((task.text || "").trim() === "") {
     textSpan.textContent = "(click to edit)";
     textSpan.dataset.placeholder = "1";
@@ -364,25 +363,24 @@ function renderTaskItem(task, parentPath, index, depth) {
     textSpan.textContent = task.text;
   }
 
-  // One-click switch: if editing another task, queue this one so it opens after blur+render
-  textSpan.addEventListener("mousedown", () => {
-    if (typeof currentEditingTaskId !== "undefined") {
+  // One-click switch while editing (if enabled)
+  if (typeof currentEditingTaskId !== "undefined") {
+    textSpan.addEventListener("mousedown", () => {
       if (currentEditingTaskId && currentEditingTaskId !== task.id) {
         queuedEditTaskId = task.id;
       }
-    }
-  });
+    });
+  }
 
   textSpan.addEventListener("click", (e) => {
     e.stopPropagation();
     startInlineTextEdit(textSpan, task);
   });
 
-  // Actions (hover)
+  // Actions
   const actions = document.createElement("span");
   actions.className = "task-actions";
 
-  // Add Subtask (auto-enter edit on new subtask)
   const addSubBtn = document.createElement("button");
   addSubBtn.type = "button";
   addSubBtn.textContent = "Add Subtask";
@@ -397,11 +395,11 @@ function renderTaskItem(task, parentPath, index, depth) {
     save();
 
     activeTaskId = newTask.id;
-    pendingEditTaskId = newTask.id; // auto-enter edit after render
+    pendingEditTaskId = newTask.id; // auto-edit after render
     render();
   });
 
-  // Copy Task (deep copy incl. date + subtasks; new IDs; no auto-edit)
+  // ✅ Copy Task (deep copy, new IDs, includes date + all subtasks)
   const copyBtn = document.createElement("button");
   copyBtn.type = "button";
   copyBtn.textContent = "Copy Task";
@@ -414,7 +412,7 @@ function renderTaskItem(task, parentPath, index, depth) {
     const { arr, index: idx } = info;
     const copied = deepCopyTask(task);
 
-    // Insert immediately after the original (same parent array)
+    // Insert immediately after original (same parent array)
     arr.splice(idx + 1, 0, copied);
 
     // Keep date groups ordered; preserve order within group
@@ -424,7 +422,6 @@ function renderTaskItem(task, parentPath, index, depth) {
     render();
   });
 
-  // Set/Remove Date toggle
   const dateToggleBtn = document.createElement("button");
   dateToggleBtn.type = "button";
   dateToggleBtn.textContent = task.date ? "Remove Date" : "Set Date";
@@ -441,29 +438,29 @@ function renderTaskItem(task, parentPath, index, depth) {
     }
   });
 
-  // Delete
-  const delBtn = document.createElement("button");
-  delBtn.type = "button";
-  delBtn.textContent = "Delete";
-  delBtn.addEventListener("click", (e) => {
-    e.stopPropagation();
-    deleteTask(task.id);
-  });
-
-  // Append actions in a sensible order
   actions.appendChild(addSubBtn);
   actions.appendChild(copyBtn);
   actions.appendChild(dateToggleBtn);
-  actions.appendChild(delBtn);
 
-  // Assemble row
+  // ✅ Only show Delete if there are NO subtasks
+  if (task.subtasks.length === 0) {
+    const delBtn = document.createElement("button");
+    delBtn.type = "button";
+    delBtn.textContent = "Delete";
+    delBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      deleteTask(task.id);
+    });
+    actions.appendChild(delBtn);
+  }
+
   row.appendChild(caret);
   row.appendChild(marker);
   if (dateSpan) row.appendChild(dateSpan);
   row.appendChild(textSpan);
   row.appendChild(actions);
 
-  // Subtasks list
+  // Subtasks
   const subOl = document.createElement("ol");
   subOl.className = levelClassForDepth(depth + 1);
   for (let j = 0; j < task.subtasks.length; j++) {
@@ -475,11 +472,12 @@ function renderTaskItem(task, parentPath, index, depth) {
   li.appendChild(row);
   li.appendChild(subOl);
 
-  // Drag/drop
   attachDragHandlers(li, task, parentPath);
 
   return li;
 }
+
+
 
   // Open a date picker from a hover button.
   // If browser supports showPicker(), it pops immediately; otherwise click will open it.

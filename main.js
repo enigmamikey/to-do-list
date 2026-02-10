@@ -170,23 +170,26 @@
     const noDate = [];
     const future = [];
 
-    for (const task of arr) {
-      if (!task.date) {
-        noDate.push(task);
-      } else if (task.date <= today) {
-        overdueOrToday.push(task);
+    // Keep original order within each bucket (stable)
+    for (const t of arr) {
+      if (!t.date) {
+        noDate.push(t);
+      } else if (t.date <= today) {
+        overdueOrToday.push(t);
       } else {
-        future.push(task);
+        future.push(t);
       }
     }
 
-    // Preserve internal order of each group
-    arr.length = 0;
-    arr.push(...overdueOrToday, ...noDate, ...future);
+    // Optional: sort within the dated buckets by date (stable within same date)
+    overdueOrToday.sort((a, b) => (a.date || "").localeCompare(b.date || ""));
+    future.sort((a, b) => (a.date || "").localeCompare(b.date || ""));
+
+    arr.splice(0, arr.length, ...overdueOrToday, ...noDate, ...future);
   }
 
   function sortAllArraysRecursively(tasks) {
-    tasks.sort(compareTasksByDate);
+    enforceGroupOrderingInArray(tasks);
     for (const t of tasks) sortAllArraysRecursively(t.subtasks);
   }
 

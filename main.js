@@ -164,24 +164,25 @@
   }
 
   function enforceGroupOrderingInArray(arr) {
-    // Keep date groups in order, preserve manual order within group.
-    const groups = new Map();
-    for (const t of arr) {
-      const k = dateKeyForGrouping(t.date);
-      if (!groups.has(k)) groups.set(k, []);
-      groups.get(k).push(t);
+    const today = new Date().toISOString().slice(0, 10);
+
+    const overdueOrToday = [];
+    const noDate = [];
+    const future = [];
+
+    for (const task of arr) {
+      if (!task.date) {
+        noDate.push(task);
+      } else if (task.date <= today) {
+        overdueOrToday.push(task);
+      } else {
+        future.push(task);
+      }
     }
 
-    const keys = Array.from(groups.keys());
-    keys.sort((a, b) => {
-      const ka = (a === "__none__") ? "9999-12-31" : a;
-      const kb = (b === "__none__") ? "9999-12-31" : b;
-      return ka.localeCompare(kb);
-    });
-
-    const rebuilt = [];
-    for (const k of keys) rebuilt.push(...groups.get(k));
-    arr.splice(0, arr.length, ...rebuilt);
+    // Preserve internal order of each group
+    arr.length = 0;
+    arr.push(...overdueOrToday, ...noDate, ...future);
   }
 
   function sortAllArraysRecursively(tasks) {
@@ -278,6 +279,8 @@
 
   // ----- Rendering -----
   function render() {
+    sortAllArraysRecursively(state.tasks);
+
     outlineEl.innerHTML = "";
     outlineEl.className = `outline-root ${levelClassForDepth(0)}`;
 

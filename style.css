@@ -147,7 +147,8 @@ ol.level-5 { margin-left: 6em; }
 ol.level-6 { margin-left: 7.5em; }
 
 .task-item{
-  margin-bottom: 6px;
+  margin: 0;
+  padding-bottom: 6px; /* keeps the visual spacing, but makes it droppable */
 }
 
 /* One dense row, baseline aligned */
@@ -155,6 +156,7 @@ ol.level-6 { margin-left: 7.5em; }
   display: flex;
   align-items: baseline;
   gap: 0.35em;
+  min-height: 100%;
 }
 
 /* Caret: NO button styling, no background, no border, no shadow */

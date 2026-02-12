@@ -504,6 +504,57 @@ function renderTaskItem(task, parentPath, index, depth) {
 
   // Open a date picker from a hover button.
   // If browser supports showPicker(), it pops immediately; otherwise click will open it.
+
+  function startInlineDateSetFromButton(task) {
+  // Create a temporary <input type="date"> so the browser date picker can be used.
+  const input = document.createElement("input");
+  input.type = "date";
+  input.value = task.date || ""; // empty = no pre-selected date
+  input.style.position = "fixed";
+  input.style.left = "-9999px";
+  input.style.top = "0";
+  input.style.opacity = "0";
+  input.style.pointerEvents = "none";
+
+  document.body.appendChild(input);
+
+  const cleanup = () => {
+    input.removeEventListener("change", onChange);
+    input.removeEventListener("blur", onBlur);
+    input.remove();
+  };
+
+  const onBlur = () => {
+    // User dismissed picker without choosing
+    cleanup();
+  };
+
+  const onChange = () => {
+    // User picked a date
+    task.date = normalizeDateInput(input.value);
+
+    // ✅ This is the key for your v0.9.4 rule:
+    // If the task "moves" due to date assignment, it should collapse (and subtree too).
+    collapseSubtree(task);
+
+    sortAllArraysRecursively(state.tasks);
+    save();
+    render();
+    cleanup();
+  };
+
+  input.addEventListener("change", onChange);
+  input.addEventListener("blur", onBlur);
+
+  // Try to open picker immediately
+  input.focus();
+  if (typeof input.showPicker === "function") {
+    input.showPicker();
+  } else {
+    input.click();
+  }
+}
+
   function startInlineTextEdit(textEl, task) {
     currentEditingTaskId = task.id;
 

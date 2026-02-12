@@ -452,6 +452,8 @@ function renderTaskItem(task, parentPath, index, depth) {
     e.stopPropagation();
     if (task.date) {
       task.date = null;
+      collapseSubtree(task);
+
       sortAllArraysRecursively(state.tasks);
       enforceGroupOrderingInArray(state.tasks);
       save();
@@ -688,6 +690,7 @@ if (e.key === "Tab") {
         return;
       }
       task.date = normalizeDateInput(input.value);
+      collapseSubtree(task);
 
       // Date changed → resort/group
       sortAllArraysRecursively(state.tasks);
@@ -730,97 +733,102 @@ if (e.key === "Tab") {
   }
 
   // ----- Drag & Drop (restricted: same parent + same date group) -----
-  function attachDragHandlers(li, task, parentPath) {
-    li.addEventListener("dragstart", (e) => {
-      e.stopPropagation(); // IMPORTANT: prevent parent <li> handlers from overwriting dragCtx
+function attachDragHandlers(li, task, parentPath) {
+  li.addEventListener("dragstart", (e) => {
+    e.stopPropagation(); // prevent parent <li> handlers from overwriting dragCtx
 
-      li.classList.add("dragging");
-      document.body.classList.add("is-dragging"); // (for wishlist #3)
+    li.classList.add("dragging");
+    document.body.classList.add("is-dragging");
 
-      dragCtx = {
-        draggedId: task.id,
-        parentPath: parentPath.slice(),
-        dateKey: dateKeyForGrouping(task.date)
-      };
+    dragCtx = {
+      draggedId: task.id,
+      parentPath: parentPath.slice(),
+      dateKey: dateKeyForGrouping(task.date),
+    };
 
-      e.dataTransfer.effectAllowed = "move";
-      e.dataTransfer.setData("text/plain", task.id);
-    });
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("text/plain", task.id);
+  });
 
-    li.addEventListener("dragend", (e) => {
-      e.stopPropagation();
+  li.addEventListener("dragend", (e) => {
+    e.stopPropagation();
 
-      li.classList.remove("dragging", "drag-over-top", "drag-over-bottom");
-      document.body.classList.remove("is-dragging"); // (for wishlist #3)
+    li.classList.remove("dragging", "drag-over-top", "drag-over-bottom");
+    document.body.classList.remove("is-dragging");
 
-      delete li.dataset.dropPosition;
-      dragCtx = null;
-      clearDropIndicators();
-    });
+    delete li.dataset.dropPosition;
+    dragCtx = null;
+    clearDropIndicators();
+  });
 
-    li.addEventListener("dragover", (e) => {
-      if (!dragCtx) return;
+  li.addEventListener("dragover", (e) => {
+    if (!dragCtx) return;
 
-      e.preventDefault();
-      e.stopPropagation();
+    e.preventDefault();
+    e.stopPropagation();
 
-      const ok = isDropAllowed(task, parentPath);
-      if (!ok) return;
+    const ok = isDropAllowed(task, parentPath);
+    if (!ok) return;
 
-      const rect = li.getBoundingClientRect();
-      const offset = e.clientY - rect.top;
+    const rect = li.getBoundingClientRect();
+    const offset = e.clientY - rect.top;
 
-      li.classList.remove("drag-over-top", "drag-over-bottom");
-      if (offset < rect.height / 2) {
-        li.classList.add("drag-over-top");
-        li.dataset.dropPosition = "top";
-      } else {
-        li.classList.add("drag-over-bottom");
-        li.dataset.dropPosition = "bottom";
-      }
-    });
+    li.classList.remove("drag-over-top", "drag-over-bottom");
+    if (offset < rect.height / 2) {
+      li.classList.add("drag-over-top");
+      li.dataset.dropPosition = "top";
+    } else {
+      li.classList.add("drag-over-bottom");
+      li.dataset.dropPosition = "bottom";
+    }
+  });
 
-    li.addEventListener("dragleave", (e) => {
-      e.stopPropagation();
-      li.classList.remove("drag-over-top", "drag-over-bottom");
-      delete li.dataset.dropPosition;
-    });
+  li.addEventListener("dragleave", (e) => {
+    e.stopPropagation();
+    li.classList.remove("drag-over-top", "drag-over-bottom");
+    delete li.dataset.dropPosition;
+  });
 
-    li.addEventListener("drop", (e) => {
-      e.preventDefault();
-      e.stopPropagation();
+  li.addEventListener("drop", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
 
-      if (!dragCtx) return;
+    if (!dragCtx) return;
 
-      const ok = isDropAllowed(task, parentPath);
-      if (!ok) {
-        showError("Drop not allowed (different date group or different parent).");
-        return;
-      }
+    const ok = isDropAllowed(task, parentPath);
+    if (!ok) {
+      showError("Drop not allowed (different date group or different parent).");
+      return;
+    }
 
-      const draggedId = dragCtx.draggedId;
-      if (draggedId === task.id) return;
+    const draggedId = dragCtx.draggedId;
+    if (draggedId === task.id) return;
 
-      const arr = getArrayByParentPath(parentPath);
-      const fromIdx = arr.findIndex(t => t.id === draggedId);
-      const toIdx = arr.findIndex(t => t.id === task.id);
-      if (fromIdx < 0 || toIdx < 0) return;
+    const arr = getArrayByParentPath(parentPath);
+    const fromIdx = arr.findIndex((t) => t.id === draggedId);
+    const toIdx = arr.findIndex((t) => t.id === task.id);
+    if (fromIdx < 0 || toIdx < 0) return;
 
-      const [moved] = arr.splice(fromIdx, 1);
+    const [moved] = arr.splice(fromIdx, 1);
 
-      if (li.dataset.dropPosition === "top") {
-        const insertIdx = (fromIdx < toIdx) ? toIdx - 1 : toIdx;
-        arr.splice(insertIdx, 0, moved);
-      } else {
-        const insertIdx = (fromIdx < toIdx) ? toIdx : toIdx + 1;
-        arr.splice(insertIdx, 0, moved);
-      }
+    if (li.dataset.dropPosition === "top") {
+      const insertIdx = fromIdx < toIdx ? toIdx - 1 : toIdx;
+      arr.splice(insertIdx, 0, moved);
+    } else {
+      const insertIdx = fromIdx < toIdx ? toIdx : toIdx + 1;
+      arr.splice(insertIdx, 0, moved);
+    }
 
-      enforceGroupOrderingInArray(arr);
-      save();
-      render();
-    });
-  }
+    // ✅ (ii) If a task is moved, collapse it (and all its descendants)
+    // Requires collapseSubtree(task) to exist (you added this in step (1)).
+    collapseSubtree(moved);
+
+    enforceGroupOrderingInArray(arr);
+    save();
+    render();
+  });
+}
+
 
   function clearDropIndicators() {
     document.querySelectorAll(".drag-over-top,.drag-over-bottom")

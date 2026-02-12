@@ -343,10 +343,19 @@ function renderTaskItem(task, parentPath, index, depth) {
   caret.addEventListener("click", (e) => {
     e.stopPropagation();
     if (!task.subtasks.length) return;
+
+    const willCollapse = !task.collapsed; // if currently expanded, we're about to collapse
     task.collapsed = !task.collapsed;
+
+    // (i) When collapsing, also collapse all descendants
+    if (willCollapse) {
+      for (const st of task.subtasks) collapseSubtree(st);
+    }
+
     save();
     render();
   });
+
 
   // Marker
   const marker = document.createElement("span");
@@ -491,100 +500,97 @@ function renderTaskItem(task, parentPath, index, depth) {
   return li;
 }
 
-
-
   // Open a date picker from a hover button.
   // If browser supports showPicker(), it pops immediately; otherwise click will open it.
-function startInlineTextEdit(textEl, task) {
-  currentEditingTaskId = task.id;
+  function startInlineTextEdit(textEl, task) {
+    currentEditingTaskId = task.id;
 
-  const input = document.createElement("span");
-  input.className = "task-text";
-  input.contentEditable = "true";
+    const input = document.createElement("span");
+    input.className = "task-text";
+    input.contentEditable = "true";
 
-  const wasPlaceholder = textEl?.dataset?.placeholder === "1";
-  input.textContent = wasPlaceholder ? "" : (task.text || "");
+    const wasPlaceholder = textEl?.dataset?.placeholder === "1";
+    input.textContent = wasPlaceholder ? "" : (task.text || "");
 
-  const commitOnly = () => {
-    task.text = input.textContent || "";
-  };
+    const commitOnly = () => {
+      task.text = input.textContent || "";
+    };
 
-  const commitAndRender = () => {
-    commitOnly();
-    currentEditingTaskId = null;
-
-    const nextId = queuedEditTaskId;
-    queuedEditTaskId = null;
-
-    save();
-    render();
-
-    if (nextId) {
-      requestAnimationFrame(() => {
-        const li = document.querySelector(
-          `li.task-item[data-task-id="${CSS.escape(nextId)}"]`
-        );
-        if (!li) return;
-        const nextTextEl = li.querySelector(".task-text");
-        const info = findTaskInfoById(nextId);
-        if (nextTextEl && info) startInlineTextEdit(nextTextEl, info.task);
-      });
-    }
-  };
-
-  input.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      e.stopPropagation();
-      input.blur();
-      return;
-    }
-
-    if (e.key === "Tab") {
-      // THIS is the key change: handle Tab here, stop it from reaching document handler,
-      // and re-open edit mode after indent/outdent.
-      e.preventDefault();
-      e.stopPropagation();
-
+    const commitAndRender = () => {
       commitOnly();
+      currentEditingTaskId = null;
 
-      // Use your existing indent/outdent functions by setting activeTaskId
-      activeTaskId = task.id;
-
-      if (e.shiftKey) outdentActive();
-      else indentActive();
-
-      // Re-enter edit mode on the same task after the structural render
-      pendingEditTaskId = task.id;
+      const nextId = queuedEditTaskId;
+      queuedEditTaskId = null;
 
       save();
       render();
-      return;
-    }
 
-    if (e.key === "Escape") {
-      e.preventDefault();
-      e.stopPropagation();
-      currentEditingTaskId = null;
-      queuedEditTaskId = null;
-      render();
-    }
-  });
+      if (nextId) {
+        requestAnimationFrame(() => {
+          const li = document.querySelector(
+            `li.task-item[data-task-id="${CSS.escape(nextId)}"]`
+          );
+          if (!li) return;
+          const nextTextEl = li.querySelector(".task-text");
+          const info = findTaskInfoById(nextId);
+          if (nextTextEl && info) startInlineTextEdit(nextTextEl, info.task);
+        });
+      }
+    };
 
-  input.addEventListener("blur", commitAndRender);
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        e.stopPropagation();
+        input.blur();
+        return;
+      }
 
-  textEl.replaceWith(input);
-  input.focus();
+      if (e.key === "Tab") {
+        // THIS is the key change: handle Tab here, stop it from reaching document handler,
+        // and re-open edit mode after indent/outdent.
+        e.preventDefault();
+        e.stopPropagation();
 
-  // Place cursor at end
-  const range = document.createRange();
-  range.selectNodeContents(input);
-  range.collapse(false);
-  const sel = window.getSelection();
-  sel.removeAllRanges();
-  sel.addRange(range);
-}
+        commitOnly();
 
+        // Use your existing indent/outdent functions by setting activeTaskId
+        activeTaskId = task.id;
+
+        if (e.shiftKey) outdentActive();
+        else indentActive();
+
+        // Re-enter edit mode on the same task after the structural render
+        pendingEditTaskId = task.id;
+
+        save();
+        render();
+        return;
+      }
+
+      if (e.key === "Escape") {
+        e.preventDefault();
+        e.stopPropagation();
+        currentEditingTaskId = null;
+        queuedEditTaskId = null;
+        render();
+      }
+    });
+
+    input.addEventListener("blur", commitAndRender);
+
+    textEl.replaceWith(input);
+    input.focus();
+
+    // Place cursor at end
+    const range = document.createRange();
+    range.selectNodeContents(input);
+    range.collapse(false);
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+  }
 
   // ----- Inline editing -----
   function startInlineTextEdit(textEl, task) {
@@ -815,7 +821,6 @@ if (e.key === "Tab") {
       render();
     });
   }
-
 
   function clearDropIndicators() {
     document.querySelectorAll(".drag-over-top,.drag-over-bottom")
@@ -1058,6 +1063,14 @@ function outdentByIdNoRender(taskId) {
     save();
     render();
   }
+
+  function collapseSubtree(task) {
+    task.collapsed = true;
+    for (const st of task.subtasks) {
+      collapseSubtree(st);
+    }
+  }
+
 
   // ----- Init -----
   load();

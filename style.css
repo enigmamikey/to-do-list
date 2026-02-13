@@ -182,6 +182,10 @@ ol.level-6 { margin-left: 7.5em; }
   text-align: right;
   color: var(--cyan);
   user-select: none;
+  cursor: grab;
+}
+.marker:active{
+  cursor: grabbing;
 }
 
 /* Date inline (hidden if null – JS won’t render span) */

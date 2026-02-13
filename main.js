@@ -322,179 +322,172 @@
     }
   }
 
-function renderTaskItem(task, parentPath, index, depth) {
-  const li = document.createElement("li");
-  li.className = "task-item";
-  li.dataset.taskId = task.id;
-  if (task.collapsed) li.classList.add("collapsed");
-  li.draggable = true;
+  function renderTaskItem(task, parentPath, index, depth) {
+    const li = document.createElement("li");
+    li.className = "task-item";
+    li.dataset.taskId = task.id;
+    if (task.collapsed) li.classList.add("collapsed");
 
-  const row = document.createElement("div");
-  row.className = "task-row";
-  row.draggable = true; // ✅ allow drag to start anywhere on the row
-  row.addEventListener("mousedown", () => {
-    activeTaskId = task.id;
-  });
+    // IMPORTANT: do NOT make the whole row draggable.
+    // We'll only allow dragging by grabbing the marker span.
+    li.draggable = false;
 
-  // Caret
-  const caret = document.createElement("button");
-  caret.type = "button";
-  caret.className = "caret" + (task.subtasks.length ? "" : " hidden");
-  caret.textContent = task.subtasks.length ? (task.collapsed ? "▶" : "▼") : "";
-  caret.addEventListener("click", (e) => {
-    e.stopPropagation();
-    if (!task.subtasks.length) return;
+    const row = document.createElement("div");
+    row.className = "task-row";
+    row.draggable = false;
 
-    const willCollapse = !task.collapsed;
-    task.collapsed = !task.collapsed;
-
-    if (willCollapse) {
-      for (const st of task.subtasks) collapseSubtree(st);
-    }
-
-    save();
-    render();
-  });
-
-  // Marker
-  const marker = document.createElement("span");
-  marker.className = "marker";
-  marker.textContent = markerFor(depth, index);
-  marker.draggable = true; // ✅ drag by grabbing the number/letter
-
-  // Date (only if present)
-  let dateSpan = null;
-  if (task.date) {
-    dateSpan = document.createElement("span");
-    dateSpan.className = "task-date";
-    dateSpan.textContent = formatDateForDisplay(task.date);
-    dateSpan.title = "Click to edit date";
-    dateSpan.draggable = true; // ✅ drag by grabbing the date
-    dateSpan.addEventListener("click", (e) => {
-      e.stopPropagation();
-      startInlineDateEdit(dateSpan, task);
+    // Keep selection for keyboard shortcuts
+    row.addEventListener("mousedown", () => {
+      activeTaskId = task.id;
     });
-  }
 
-  // Text (placeholder if empty)
-  const textSpan = document.createElement("span");
-  textSpan.className = "task-text";
-  textSpan.title = "Click to edit text";
-  textSpan.draggable = true; // ✅ drag by grabbing the task text
-
-  if ((task.text || "").trim() === "") {
-    textSpan.textContent = "(click to edit)";
-    textSpan.dataset.placeholder = "1";
-  } else {
-    textSpan.textContent = task.text;
-  }
-
-  // One-click switch while editing (queue next task)
-  textSpan.addEventListener("mousedown", () => {
-    if (currentEditingTaskId && currentEditingTaskId !== task.id) {
-      queuedEditTaskId = task.id;
-    }
-  });
-
-  textSpan.addEventListener("click", (e) => {
-    e.stopPropagation();
-    startInlineTextEdit(textSpan, task);
-  });
-
-  // Actions
-  const actions = document.createElement("span");
-  actions.className = "task-actions";
-
-  const addSubBtn = document.createElement("button");
-  addSubBtn.type = "button";
-  addSubBtn.textContent = "Add Subtask";
-  addSubBtn.addEventListener("click", (e) => {
-    e.stopPropagation();
-
-    const newTask = makeNewTask(null, "");
-    task.subtasks.push(newTask);
-    task.collapsed = false;
-
-    sortAllArraysRecursively(state.tasks);
-    save();
-
-    activeTaskId = newTask.id;
-    pendingEditTaskId = newTask.id;
-    render();
-  });
-
-  const copyBtn = document.createElement("button");
-  copyBtn.type = "button";
-  copyBtn.textContent = "Copy Task";
-  copyBtn.addEventListener("click", (e) => {
-    e.stopPropagation();
-
-    const info = findTaskInfoById(task.id);
-    if (!info) return;
-
-    const { arr, index: idx } = info;
-    const copied = deepCopyTask(task);
-
-    arr.splice(idx + 1, 0, copied);
-    enforceGroupOrderingInArray(arr);
-
-    save();
-    render();
-  });
-
-  const dateToggleBtn = document.createElement("button");
-  dateToggleBtn.type = "button";
-  dateToggleBtn.textContent = task.date ? "Remove Date" : "Set Date";
-  dateToggleBtn.addEventListener("click", (e) => {
-    e.stopPropagation();
-    if (task.date) {
-      task.date = null;
-      collapseSubtree(task);
-
-      sortAllArraysRecursively(state.tasks);
-      enforceGroupOrderingInArray(state.tasks);
+    // Caret
+    const caret = document.createElement("button");
+    caret.type = "button";
+    caret.className = "caret" + (task.subtasks.length ? "" : " hidden");
+    caret.textContent = task.subtasks.length ? (task.collapsed ? "▶" : "▼") : "";
+    caret.addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (!task.subtasks.length) return;
+      const willCollapse = !task.collapsed;
+      task.collapsed = !task.collapsed;
+      if (willCollapse) {
+        for (const st of task.subtasks) collapseSubtree(st);
+      }
       save();
       render();
-    } else {
-      startInlineDateSetFromButton(task);
-    }
-  });
-
-  actions.appendChild(addSubBtn);
-  actions.appendChild(copyBtn);
-  actions.appendChild(dateToggleBtn);
-
-  if (task.subtasks.length === 0) {
-    const delBtn = document.createElement("button");
-    delBtn.type = "button";
-    delBtn.textContent = "Delete";
-    delBtn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      deleteTask(task.id);
     });
-    actions.appendChild(delBtn);
+
+    // Marker (ONLY draggable handle)
+    const marker = document.createElement("span");
+    marker.className = "marker";
+    marker.textContent = markerFor(depth, index);
+    marker.draggable = true; // ✅ drag ONLY by grabbing the number/letter
+    marker.title = "Drag to move";
+
+    // Date (only if present)
+    let dateSpan = null;
+    if (task.date) {
+      dateSpan = document.createElement("span");
+      dateSpan.className = "task-date";
+      dateSpan.textContent = formatDateForDisplay(task.date);
+      dateSpan.title = "Click to edit date";
+      // NOT draggable
+      dateSpan.addEventListener("click", (e) => {
+        e.stopPropagation();
+        startInlineDateEdit(dateSpan, task);
+      });
+    }
+
+    // Text (placeholder if empty)
+    const textSpan = document.createElement("span");
+    textSpan.className = "task-text";
+    textSpan.title = "Click to edit text";
+    // NOT draggable
+    if ((task.text || "").trim() === "") {
+      textSpan.textContent = "(click to edit)";
+      textSpan.dataset.placeholder = "1";
+    } else {
+      textSpan.textContent = task.text;
+    }
+
+    // One-click switch while editing (queue next task)
+    textSpan.addEventListener("mousedown", () => {
+      if (currentEditingTaskId && currentEditingTaskId !== task.id) {
+        queuedEditTaskId = task.id;
+      }
+    });
+    textSpan.addEventListener("click", (e) => {
+      e.stopPropagation();
+      startInlineTextEdit(textSpan, task);
+    });
+
+    // Actions
+    const actions = document.createElement("span");
+    actions.className = "task-actions";
+
+    const addSubBtn = document.createElement("button");
+    addSubBtn.type = "button";
+    addSubBtn.textContent = "Add Subtask";
+    addSubBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const newTask = makeNewTask(null, "");
+      task.subtasks.push(newTask);
+      task.collapsed = false;
+      sortAllArraysRecursively(state.tasks);
+      save();
+      activeTaskId = newTask.id;
+      pendingEditTaskId = newTask.id;
+      render();
+    });
+
+    const copyBtn = document.createElement("button");
+    copyBtn.type = "button";
+    copyBtn.textContent = "Copy Task";
+    copyBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const info = findTaskInfoById(task.id);
+      if (!info) return;
+      const { arr, index: idx } = info;
+      const copied = deepCopyTask(task);
+      arr.splice(idx + 1, 0, copied);
+      enforceGroupOrderingInArray(arr);
+      save();
+      render();
+    });
+
+    const dateToggleBtn = document.createElement("button");
+    dateToggleBtn.type = "button";
+    dateToggleBtn.textContent = task.date ? "Remove Date" : "Set Date";
+    dateToggleBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (task.date) {
+        task.date = null;
+        collapseSubtree(task);
+        sortAllArraysRecursively(state.tasks);
+        enforceGroupOrderingInArray(state.tasks);
+        save();
+        render();
+      } else {
+        startInlineDateSetFromButton(task);
+      }
+    });
+
+    actions.appendChild(addSubBtn);
+    actions.appendChild(copyBtn);
+    actions.appendChild(dateToggleBtn);
+
+    if (task.subtasks.length === 0) {
+      const delBtn = document.createElement("button");
+      delBtn.type = "button";
+      delBtn.textContent = "Delete";
+      delBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        deleteTask(task.id);
+      });
+      actions.appendChild(delBtn);
+    }
+
+    row.appendChild(caret);
+    row.appendChild(marker);
+    if (dateSpan) row.appendChild(dateSpan);
+    row.appendChild(textSpan);
+    row.appendChild(actions);
+
+    const subOl = document.createElement("ol");
+    subOl.className = levelClassForDepth(depth + 1);
+    for (let j = 0; j < task.subtasks.length; j++) {
+      subOl.appendChild(
+        renderTaskItem(task.subtasks[j], parentPath.concat(index), j, depth + 1)
+      );
+    }
+
+    li.appendChild(row);
+    li.appendChild(subOl);
+
+    attachDragHandlers(li, task, parentPath);
+    return li;
   }
-
-  row.appendChild(caret);
-  row.appendChild(marker);
-  if (dateSpan) row.appendChild(dateSpan);
-  row.appendChild(textSpan);
-  row.appendChild(actions);
-
-  const subOl = document.createElement("ol");
-  subOl.className = levelClassForDepth(depth + 1);
-  for (let j = 0; j < task.subtasks.length; j++) {
-    subOl.appendChild(
-      renderTaskItem(task.subtasks[j], parentPath.concat(index), j, depth + 1)
-    );
-  }
-
-  li.appendChild(row);
-  li.appendChild(subOl);
-
-  attachDragHandlers(li, task, parentPath);
-  return li;
-}
 
   // Open a date picker from a hover button.
   // If browser supports showPicker(), it pops immediately; otherwise click will open it.
@@ -688,102 +681,102 @@ if (e.key === "Tab") {
   }
 
   // ----- Drag & Drop (restricted: same parent + same date group) -----
-function attachDragHandlers(li, task, parentPath) {
-  li.addEventListener("dragstart", (e) => {
-    e.stopPropagation(); // prevent parent <li> handlers from overwriting dragCtx
+  function attachDragHandlers(li, task, parentPath) {
+    li.addEventListener("dragstart", (e) => {
+      // ✅ Only allow dragging if the gesture started on the marker handle
+      const target = e.target;
+      if (!(target instanceof HTMLElement) || !target.classList.contains("marker")) {
+        e.preventDefault();
+        return;
+      }
 
-    li.classList.add("dragging");
-    document.body.classList.add("is-dragging");
+      e.stopPropagation(); // prevent parent handlers from overwriting dragCtx
+      li.classList.add("dragging");
+      document.body.classList.add("is-dragging");
 
-    dragCtx = {
-      draggedId: task.id,
-      parentPath: parentPath.slice(),
-      dateKey: dateKeyForGrouping(task.date),
-    };
+      dragCtx = {
+        draggedId: task.id,
+        parentPath: parentPath.slice(),
+        dateKey: dateKeyForGrouping(task.date),
+      };
 
-    e.dataTransfer.effectAllowed = "move";
-    e.dataTransfer.setData("text/plain", task.id);
-  });
+      e.dataTransfer.effectAllowed = "move";
+      e.dataTransfer.setData("text/plain", task.id);
+    });
 
-  li.addEventListener("dragend", (e) => {
-    e.stopPropagation();
+    li.addEventListener("dragend", (e) => {
+      e.stopPropagation();
+      li.classList.remove("dragging", "drag-over-top", "drag-over-bottom");
+      document.body.classList.remove("is-dragging");
+      delete li.dataset.dropPosition;
+      dragCtx = null;
+      clearDropIndicators();
+    });
 
-    li.classList.remove("dragging", "drag-over-top", "drag-over-bottom");
-    document.body.classList.remove("is-dragging");
+    li.addEventListener("dragover", (e) => {
+      if (!dragCtx) return;
+      e.preventDefault();
+      e.stopPropagation();
 
-    delete li.dataset.dropPosition;
-    dragCtx = null;
-    clearDropIndicators();
-  });
+      const ok = isDropAllowed(task, parentPath);
+      if (!ok) return;
 
-  li.addEventListener("dragover", (e) => {
-    if (!dragCtx) return;
+      const rect = li.getBoundingClientRect();
+      const offset = e.clientY - rect.top;
 
-    e.preventDefault();
-    e.stopPropagation();
+      li.classList.remove("drag-over-top", "drag-over-bottom");
+      if (offset < rect.height / 2) {
+        li.classList.add("drag-over-top");
+        li.dataset.dropPosition = "top";
+      } else {
+        li.classList.add("drag-over-bottom");
+        li.dataset.dropPosition = "bottom";
+      }
+    });
 
-    const ok = isDropAllowed(task, parentPath);
-    if (!ok) return;
+    li.addEventListener("dragleave", (e) => {
+      e.stopPropagation();
+      li.classList.remove("drag-over-top", "drag-over-bottom");
+      delete li.dataset.dropPosition;
+    });
 
-    const rect = li.getBoundingClientRect();
-    const offset = e.clientY - rect.top;
+    li.addEventListener("drop", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (!dragCtx) return;
 
-    li.classList.remove("drag-over-top", "drag-over-bottom");
-    if (offset < rect.height / 2) {
-      li.classList.add("drag-over-top");
-      li.dataset.dropPosition = "top";
-    } else {
-      li.classList.add("drag-over-bottom");
-      li.dataset.dropPosition = "bottom";
-    }
-  });
+      const ok = isDropAllowed(task, parentPath);
+      if (!ok) {
+        showError("Drop not allowed (different date group or different parent).");
+        return;
+      }
 
-  li.addEventListener("dragleave", (e) => {
-    e.stopPropagation();
-    li.classList.remove("drag-over-top", "drag-over-bottom");
-    delete li.dataset.dropPosition;
-  });
+      const draggedId = dragCtx.draggedId;
+      if (draggedId === task.id) return;
 
-  li.addEventListener("drop", (e) => {
-    e.preventDefault();
-    e.stopPropagation();
+      const arr = getArrayByParentPath(parentPath);
+      const fromIdx = arr.findIndex((t) => t.id === draggedId);
+      const toIdx = arr.findIndex((t) => t.id === task.id);
+      if (fromIdx < 0 || toIdx < 0) return;
 
-    if (!dragCtx) return;
+      const [moved] = arr.splice(fromIdx, 1);
 
-    const ok = isDropAllowed(task, parentPath);
-    if (!ok) {
-      showError("Drop not allowed (different date group or different parent).");
-      return;
-    }
+      if (li.dataset.dropPosition === "top") {
+        const insertIdx = fromIdx < toIdx ? toIdx - 1 : toIdx;
+        arr.splice(insertIdx, 0, moved);
+      } else {
+        const insertIdx = fromIdx < toIdx ? toIdx : toIdx + 1;
+        arr.splice(insertIdx, 0, moved);
+      }
 
-    const draggedId = dragCtx.draggedId;
-    if (draggedId === task.id) return;
+      // If a task is moved, collapse it (and descendants)
+      collapseSubtree(moved);
 
-    const arr = getArrayByParentPath(parentPath);
-    const fromIdx = arr.findIndex((t) => t.id === draggedId);
-    const toIdx = arr.findIndex((t) => t.id === task.id);
-    if (fromIdx < 0 || toIdx < 0) return;
-
-    const [moved] = arr.splice(fromIdx, 1);
-
-    if (li.dataset.dropPosition === "top") {
-      const insertIdx = fromIdx < toIdx ? toIdx - 1 : toIdx;
-      arr.splice(insertIdx, 0, moved);
-    } else {
-      const insertIdx = fromIdx < toIdx ? toIdx : toIdx + 1;
-      arr.splice(insertIdx, 0, moved);
-    }
-
-    // ✅ (ii) If a task is moved, collapse it (and all its descendants)
-    // Requires collapseSubtree(task) to exist (you added this in step (1)).
-    collapseSubtree(moved);
-
-    enforceGroupOrderingInArray(arr);
-    save();
-    render();
-  });
-}
-
+      enforceGroupOrderingInArray(arr);
+      save();
+      render();
+    });
+  }
 
   function clearDropIndicators() {
     document.querySelectorAll(".drag-over-top,.drag-over-bottom")
@@ -931,7 +924,7 @@ function attachDragHandlers(li, task, parentPath) {
   // After structure change + render, re-enter edit mode
   pendingEditTaskId = task.id;
   render();
-}
+  }
 
   function indentActive() {
     const info = findTaskInfoById(activeTaskId);
@@ -976,38 +969,38 @@ function attachDragHandlers(li, task, parentPath) {
     render();
   }
 
-function indentByIdNoRender(taskId) {
-  const info = findTaskInfoById(taskId);
-  if (!info) return false;
+  function indentByIdNoRender(taskId) {
+    const info = findTaskInfoById(taskId);
+    if (!info) return false;
 
-  const { task, index, arr } = info;
-  if (index === 0) return false; // can't indent first item
+    const { task, index, arr } = info;
+    if (index === 0) return false; // can't indent first item
 
-  const prev = arr[index - 1];
-  arr.splice(index, 1);
-  prev.subtasks.push(task);
-  prev.collapsed = false;
-  return true;
-}
+    const prev = arr[index - 1];
+    arr.splice(index, 1);
+    prev.subtasks.push(task);
+    prev.collapsed = false;
+    return true;
+  }
 
-function outdentByIdNoRender(taskId) {
-  const info = findTaskInfoById(taskId);
-  if (!info) return false;
+  function outdentByIdNoRender(taskId) {
+    const info = findTaskInfoById(taskId);
+    if (!info) return false;
 
-  const { task, index, parentPath } = info;
-  if (parentPath.length === 0) return false; // already root
+    const { task, index, parentPath } = info;
+    if (parentPath.length === 0) return false; // already root
 
-  const parentIndex = parentPath[parentPath.length - 1];
-  const grandParentPath = parentPath.slice(0, -1);
-  const grandArr = getArrayByParentPath(grandParentPath);
-  const parentTask = grandArr[parentIndex];
+    const parentIndex = parentPath[parentPath.length - 1];
+    const grandParentPath = parentPath.slice(0, -1);
+    const grandArr = getArrayByParentPath(grandParentPath);
+    const parentTask = grandArr[parentIndex];
 
-  parentTask.subtasks.splice(index, 1);
-  grandArr.splice(parentIndex + 1, 0, task);
+    parentTask.subtasks.splice(index, 1);
+    grandArr.splice(parentIndex + 1, 0, task);
 
-  enforceGroupOrderingInArray(grandArr);
-  return true;
-}
+    enforceGroupOrderingInArray(grandArr);
+    return true;
+  }
 
   function collapseActive() {
     const info = findTaskInfoById(activeTaskId);
@@ -1033,7 +1026,6 @@ function outdentByIdNoRender(taskId) {
       collapseSubtree(st);
     }
   }
-
 
   // ----- Init -----
   load();

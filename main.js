@@ -328,7 +328,7 @@
     li.dataset.taskId = task.id;
     if (task.collapsed) li.classList.add("collapsed");
 
-    // Only the marker will be draggable
+    // We are NOT using HTML5 drag anymore (Chrome flakiness).
     li.draggable = false;
 
     const row = document.createElement("div");
@@ -356,11 +356,11 @@
       render();
     });
 
-    // Marker (ONLY draggable handle)
+    // Marker (handle)
     const marker = document.createElement("span");
     marker.className = "marker";
     marker.textContent = markerFor(depth, index);
-    marker.draggable = true;
+    marker.draggable = false; // IMPORTANT: not HTML5 draggable
     marker.title = "Drag to move";
 
     // Date (only if present)
@@ -376,7 +376,7 @@
       });
     }
 
-    // Text (placeholder if empty)
+    // Text
     const textSpan = document.createElement("span");
     textSpan.className = "task-text";
     textSpan.title = "Click to edit text";
@@ -480,7 +480,7 @@
     li.appendChild(row);
     li.appendChild(subOl);
 
-    // 👇 IMPORTANT: pass marker so dragstart is attached to marker directly
+    // Mouse-driven drag (reliable)
     attachDragHandlers(li, marker, task, parentPath);
 
     return li;
@@ -679,95 +679,133 @@ if (e.key === "Tab") {
 
   // ----- Drag & Drop (restricted: same parent + same date group) -----
   function attachDragHandlers(li, markerEl, task, parentPath) {
-    // Attach dragstart to the draggable element itself (marker),
-    // because Chrome can be inconsistent when dragstart is only listened
-    // for on ancestors.
-    markerEl.addEventListener("dragstart", (e) => {
+    // Mouse-driven drag to avoid flaky HTML5 dragstart in Chrome/Windows.
+    // Uses same drop rules: same parent + same date group.
+
+    let isPointerDragging = false;
+    let lastHoverLi = null;
+
+    const cleanupHover = () => {
+      if (lastHoverLi) {
+        lastHoverLi.classList.remove("drag-over-top", "drag-over-bottom");
+        delete lastHoverLi.dataset.dropPosition;
+        lastHoverLi = null;
+      }
+    };
+
+    const onMouseMove = (e) => {
+      if (!isPointerDragging || !dragCtx) return;
+
+      // Find the task-item under the cursor
+      const el = document.elementFromPoint(e.clientX, e.clientY);
+      const hoverLi = el ? el.closest("li.task-item") : null;
+
+      cleanupHover();
+
+      if (!hoverLi) return;
+      if (hoverLi === li) return;
+
+      const hoverId = hoverLi.dataset.taskId;
+      if (!hoverId) return;
+
+      const hoverInfo = findTaskInfoById(hoverId);
+      if (!hoverInfo) return;
+
+      // Enforce same parent + same date group
+      const ok = isDropAllowed(hoverInfo.task, hoverInfo.parentPath);
+      if (!ok) return;
+
+      const rect = hoverLi.getBoundingClientRect();
+      const offset = e.clientY - rect.top;
+
+      hoverLi.classList.remove("drag-over-top", "drag-over-bottom");
+      if (offset < rect.height / 2) {
+        hoverLi.classList.add("drag-over-top");
+        hoverLi.dataset.dropPosition = "top";
+      } else {
+        hoverLi.classList.add("drag-over-bottom");
+        hoverLi.dataset.dropPosition = "bottom";
+      }
+
+      lastHoverLi = hoverLi;
+    };
+
+    const onMouseUp = (e) => {
+      if (!isPointerDragging) return;
+
+      isPointerDragging = false;
+      document.removeEventListener("mousemove", onMouseMove, true);
+      document.removeEventListener("mouseup", onMouseUp, true);
+
+      li.classList.remove("dragging");
+      document.body.classList.remove("is-dragging");
+
+      if (!dragCtx) {
+        cleanupHover();
+        return;
+      }
+
+      // If we have a hovered drop target, perform the move
+      if (lastHoverLi) {
+        const targetId = lastHoverLi.dataset.taskId;
+        const targetInfo = targetId ? findTaskInfoById(targetId) : null;
+
+        if (targetInfo) {
+          const ok = isDropAllowed(targetInfo.task, targetInfo.parentPath);
+          if (ok) {
+            const arr = getArrayByParentPath(targetInfo.parentPath);
+
+            const fromIdx = arr.findIndex((t) => t.id === dragCtx.draggedId);
+            const toIdx = arr.findIndex((t) => t.id === targetInfo.task.id);
+
+            if (fromIdx >= 0 && toIdx >= 0 && fromIdx !== toIdx) {
+              const [moved] = arr.splice(fromIdx, 1);
+
+              if (lastHoverLi.dataset.dropPosition === "top") {
+                const insertIdx = fromIdx < toIdx ? toIdx - 1 : toIdx;
+                arr.splice(insertIdx, 0, moved);
+              } else {
+                const insertIdx = fromIdx < toIdx ? toIdx : toIdx + 1;
+                arr.splice(insertIdx, 0, moved);
+              }
+
+              // Keep your behavior: moved task collapses
+              collapseSubtree(moved);
+
+              enforceGroupOrderingInArray(arr);
+              save();
+              render();
+            }
+          }
+        }
+      }
+
+      cleanupHover();
+      dragCtx = null;
+    };
+
+    markerEl.addEventListener("mousedown", (e) => {
+      // left-click only
+      if (e.button !== 0) return;
+
+      // Prevent text selection / focus weirdness
+      e.preventDefault();
       e.stopPropagation();
 
-      li.classList.add("dragging");
-      document.body.classList.add("is-dragging");
-
+      // Set drag state exactly like before
       dragCtx = {
         draggedId: task.id,
         parentPath: parentPath.slice(),
         dateKey: dateKeyForGrouping(task.date),
       };
 
-      e.dataTransfer.effectAllowed = "move";
-      e.dataTransfer.setData("text/plain", task.id);
-    });
+      isPointerDragging = true;
+      li.classList.add("dragging");
+      document.body.classList.add("is-dragging");
 
-    markerEl.addEventListener("dragend", (e) => {
-      e.stopPropagation();
-      li.classList.remove("dragging", "drag-over-top", "drag-over-bottom");
-      document.body.classList.remove("is-dragging");
-      delete li.dataset.dropPosition;
-      dragCtx = null;
-      clearDropIndicators();
-    });
-
-    li.addEventListener("dragover", (e) => {
-      if (!dragCtx) return;
-      e.preventDefault();
-      e.stopPropagation();
-
-      const ok = isDropAllowed(task, parentPath);
-      if (!ok) return;
-
-      const rect = li.getBoundingClientRect();
-      const offset = e.clientY - rect.top;
-
-      li.classList.remove("drag-over-top", "drag-over-bottom");
-      if (offset < rect.height / 2) {
-        li.classList.add("drag-over-top");
-        li.dataset.dropPosition = "top";
-      } else {
-        li.classList.add("drag-over-bottom");
-        li.dataset.dropPosition = "bottom";
-      }
-    });
-
-    li.addEventListener("dragleave", (e) => {
-      e.stopPropagation();
-      li.classList.remove("drag-over-top", "drag-over-bottom");
-      delete li.dataset.dropPosition;
-    });
-
-    li.addEventListener("drop", (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      if (!dragCtx) return;
-
-      const ok = isDropAllowed(task, parentPath);
-      if (!ok) {
-        showError("Drop not allowed (different date group or different parent).");
-        return;
-      }
-
-      const draggedId = dragCtx.draggedId;
-      if (draggedId === task.id) return;
-
-      const arr = getArrayByParentPath(parentPath);
-      const fromIdx = arr.findIndex((t) => t.id === draggedId);
-      const toIdx = arr.findIndex((t) => t.id === task.id);
-      if (fromIdx < 0 || toIdx < 0) return;
-
-      const [moved] = arr.splice(fromIdx, 1);
-
-      if (li.dataset.dropPosition === "top") {
-        const insertIdx = fromIdx < toIdx ? toIdx - 1 : toIdx;
-        arr.splice(insertIdx, 0, moved);
-      } else {
-        const insertIdx = fromIdx < toIdx ? toIdx : toIdx + 1;
-        arr.splice(insertIdx, 0, moved);
-      }
-
-      collapseSubtree(moved);
-
-      enforceGroupOrderingInArray(arr);
-      save();
-      render();
+      // Capture move/up at document level so it stays reliable
+      document.addEventListener("mousemove", onMouseMove, true);
+      document.addEventListener("mouseup", onMouseUp, true);
     });
   }
 

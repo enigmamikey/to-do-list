@@ -331,6 +331,7 @@ function renderTaskItem(task, parentPath, index, depth) {
 
   const row = document.createElement("div");
   row.className = "task-row";
+  row.draggable = true; // ✅ allow drag to start anywhere on the row
   row.addEventListener("mousedown", () => {
     activeTaskId = task.id;
   });
@@ -344,10 +345,9 @@ function renderTaskItem(task, parentPath, index, depth) {
     e.stopPropagation();
     if (!task.subtasks.length) return;
 
-    const willCollapse = !task.collapsed; // if currently expanded, we're about to collapse
+    const willCollapse = !task.collapsed;
     task.collapsed = !task.collapsed;
 
-    // (i) When collapsing, also collapse all descendants
     if (willCollapse) {
       for (const st of task.subtasks) collapseSubtree(st);
     }
@@ -356,11 +356,11 @@ function renderTaskItem(task, parentPath, index, depth) {
     render();
   });
 
-
   // Marker
   const marker = document.createElement("span");
   marker.className = "marker";
   marker.textContent = markerFor(depth, index);
+  marker.draggable = true; // ✅ drag by grabbing the number/letter
 
   // Date (only if present)
   let dateSpan = null;
@@ -369,6 +369,7 @@ function renderTaskItem(task, parentPath, index, depth) {
     dateSpan.className = "task-date";
     dateSpan.textContent = formatDateForDisplay(task.date);
     dateSpan.title = "Click to edit date";
+    dateSpan.draggable = true; // ✅ drag by grabbing the date
     dateSpan.addEventListener("click", (e) => {
       e.stopPropagation();
       startInlineDateEdit(dateSpan, task);
@@ -379,6 +380,8 @@ function renderTaskItem(task, parentPath, index, depth) {
   const textSpan = document.createElement("span");
   textSpan.className = "task-text";
   textSpan.title = "Click to edit text";
+  textSpan.draggable = true; // ✅ drag by grabbing the task text
+
   if ((task.text || "").trim() === "") {
     textSpan.textContent = "(click to edit)";
     textSpan.dataset.placeholder = "1";
@@ -386,14 +389,12 @@ function renderTaskItem(task, parentPath, index, depth) {
     textSpan.textContent = task.text;
   }
 
-  // One-click switch while editing (if enabled)
-  if (typeof currentEditingTaskId !== "undefined") {
-    textSpan.addEventListener("mousedown", () => {
-      if (currentEditingTaskId && currentEditingTaskId !== task.id) {
-        queuedEditTaskId = task.id;
-      }
-    });
-  }
+  // One-click switch while editing (queue next task)
+  textSpan.addEventListener("mousedown", () => {
+    if (currentEditingTaskId && currentEditingTaskId !== task.id) {
+      queuedEditTaskId = task.id;
+    }
+  });
 
   textSpan.addEventListener("click", (e) => {
     e.stopPropagation();
@@ -418,11 +419,10 @@ function renderTaskItem(task, parentPath, index, depth) {
     save();
 
     activeTaskId = newTask.id;
-    pendingEditTaskId = newTask.id; // auto-edit after render
+    pendingEditTaskId = newTask.id;
     render();
   });
 
-  // ✅ Copy Task (deep copy, new IDs, includes date + all subtasks)
   const copyBtn = document.createElement("button");
   copyBtn.type = "button";
   copyBtn.textContent = "Copy Task";
@@ -435,10 +435,7 @@ function renderTaskItem(task, parentPath, index, depth) {
     const { arr, index: idx } = info;
     const copied = deepCopyTask(task);
 
-    // Insert immediately after original (same parent array)
     arr.splice(idx + 1, 0, copied);
-
-    // Keep date groups ordered; preserve order within group
     enforceGroupOrderingInArray(arr);
 
     save();
@@ -467,7 +464,6 @@ function renderTaskItem(task, parentPath, index, depth) {
   actions.appendChild(copyBtn);
   actions.appendChild(dateToggleBtn);
 
-  // ✅ Only show Delete if there are NO subtasks
   if (task.subtasks.length === 0) {
     const delBtn = document.createElement("button");
     delBtn.type = "button";
@@ -485,7 +481,6 @@ function renderTaskItem(task, parentPath, index, depth) {
   row.appendChild(textSpan);
   row.appendChild(actions);
 
-  // Subtasks
   const subOl = document.createElement("ol");
   subOl.className = levelClassForDepth(depth + 1);
   for (let j = 0; j < task.subtasks.length; j++) {
@@ -498,7 +493,6 @@ function renderTaskItem(task, parentPath, index, depth) {
   li.appendChild(subOl);
 
   attachDragHandlers(li, task, parentPath);
-
   return li;
 }
 

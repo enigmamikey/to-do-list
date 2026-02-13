@@ -245,7 +245,8 @@ ol.level-6 { margin-left: 7.5em; }
   font-style: italic;
 }
 
-/* While dragging, hide action links so the drag "ghost" is cleaner */
-.is-dragging .task-actions {
-  display: none !important;
+/* While dragging, hide action links visually but KEEP their layout space (prevents reflow) */
+.is-dragging .task-actions{
+  opacity: 0 !important;
+  pointer-events: none !important;
 }

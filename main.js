@@ -328,15 +328,13 @@
     li.dataset.taskId = task.id;
     if (task.collapsed) li.classList.add("collapsed");
 
-    // IMPORTANT: do NOT make the whole row draggable.
-    // We'll only allow dragging by grabbing the marker span.
+    // Only the marker will be draggable
     li.draggable = false;
 
     const row = document.createElement("div");
     row.className = "task-row";
     row.draggable = false;
 
-    // Keep selection for keyboard shortcuts
     row.addEventListener("mousedown", () => {
       activeTaskId = task.id;
     });
@@ -362,7 +360,7 @@
     const marker = document.createElement("span");
     marker.className = "marker";
     marker.textContent = markerFor(depth, index);
-    marker.draggable = true; // ✅ drag ONLY by grabbing the number/letter
+    marker.draggable = true;
     marker.title = "Drag to move";
 
     // Date (only if present)
@@ -372,7 +370,6 @@
       dateSpan.className = "task-date";
       dateSpan.textContent = formatDateForDisplay(task.date);
       dateSpan.title = "Click to edit date";
-      // NOT draggable
       dateSpan.addEventListener("click", (e) => {
         e.stopPropagation();
         startInlineDateEdit(dateSpan, task);
@@ -383,7 +380,6 @@
     const textSpan = document.createElement("span");
     textSpan.className = "task-text";
     textSpan.title = "Click to edit text";
-    // NOT draggable
     if ((task.text || "").trim() === "") {
       textSpan.textContent = "(click to edit)";
       textSpan.dataset.placeholder = "1";
@@ -391,7 +387,6 @@
       textSpan.textContent = task.text;
     }
 
-    // One-click switch while editing (queue next task)
     textSpan.addEventListener("mousedown", () => {
       if (currentEditingTaskId && currentEditingTaskId !== task.id) {
         queuedEditTaskId = task.id;
@@ -485,7 +480,9 @@
     li.appendChild(row);
     li.appendChild(subOl);
 
-    attachDragHandlers(li, task, parentPath);
+    // 👇 IMPORTANT: pass marker so dragstart is attached to marker directly
+    attachDragHandlers(li, marker, task, parentPath);
+
     return li;
   }
 
@@ -681,16 +678,13 @@ if (e.key === "Tab") {
   }
 
   // ----- Drag & Drop (restricted: same parent + same date group) -----
-  function attachDragHandlers(li, task, parentPath) {
-    li.addEventListener("dragstart", (e) => {
-      // ✅ Only allow dragging if the gesture started on the marker handle
-      const target = e.target;
-      if (!(target instanceof HTMLElement) || !target.classList.contains("marker")) {
-        e.preventDefault();
-        return;
-      }
+  function attachDragHandlers(li, markerEl, task, parentPath) {
+    // Attach dragstart to the draggable element itself (marker),
+    // because Chrome can be inconsistent when dragstart is only listened
+    // for on ancestors.
+    markerEl.addEventListener("dragstart", (e) => {
+      e.stopPropagation();
 
-      e.stopPropagation(); // prevent parent handlers from overwriting dragCtx
       li.classList.add("dragging");
       document.body.classList.add("is-dragging");
 
@@ -704,7 +698,7 @@ if (e.key === "Tab") {
       e.dataTransfer.setData("text/plain", task.id);
     });
 
-    li.addEventListener("dragend", (e) => {
+    markerEl.addEventListener("dragend", (e) => {
       e.stopPropagation();
       li.classList.remove("dragging", "drag-over-top", "drag-over-bottom");
       document.body.classList.remove("is-dragging");
@@ -769,7 +763,6 @@ if (e.key === "Tab") {
         arr.splice(insertIdx, 0, moved);
       }
 
-      // If a task is moved, collapse it (and descendants)
       collapseSubtree(moved);
 
       enforceGroupOrderingInArray(arr);

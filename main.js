@@ -490,53 +490,57 @@
   // If browser supports showPicker(), it pops immediately; otherwise click will open it.
 
   function startInlineDateSetFromButton(task) {
-  // Create a temporary <input type="date"> so the browser date picker can be used.
-  const input = document.createElement("input");
-  input.type = "date";
-  input.value = task.date || ""; // empty = no pre-selected date
-  input.style.position = "fixed";
-  input.style.left = "-9999px";
-  input.style.top = "0";
-  input.style.opacity = "0";
-  input.style.pointerEvents = "none";
+    // Create a temporary <input type="date"> so the browser date picker can be used.
+    const input = document.createElement("input");
+    input.type = "date";
+    input.value = task.date || ""; // empty = no pre-selected date
 
-  document.body.appendChild(input);
+    // IMPORTANT: keep it invisible, but still "real" / interactable for Chrome.
+    input.style.position = "fixed";
+    input.style.left = "0";
+    input.style.top = "0";
+    input.style.width = "1px";
+    input.style.height = "1px";
+    input.style.opacity = "0";
+    input.style.zIndex = "-1";
+    // DO NOT set pointerEvents:none — that can prevent the picker from opening.
 
-  const cleanup = () => {
-    input.removeEventListener("change", onChange);
-    input.removeEventListener("blur", onBlur);
-    input.remove();
-  };
+    document.body.appendChild(input);
 
-  const onBlur = () => {
-    // User dismissed picker without choosing
-    cleanup();
-  };
+    const cleanup = () => {
+      input.removeEventListener("change", onChange);
+      input.removeEventListener("blur", onBlur);
+      input.remove();
+    };
 
-  const onChange = () => {
-    // User picked a date
-    task.date = normalizeDateInput(input.value);
+    const onBlur = () => {
+      // User dismissed picker without choosing
+      cleanup();
+    };
 
-    // ✅ This is the key for your v0.9.4 rule:
-    // If the task "moves" due to date assignment, it should collapse (and subtree too).
-    collapseSubtree(task);
+    const onChange = () => {
+      // User picked a date
+      task.date = normalizeDateInput(input.value);
 
-    sortAllArraysRecursively(state.tasks);
-    save();
-    render();
-    cleanup();
-  };
+      // If the task "moves" due to date assignment, collapse it (and subtree too).
+      collapseSubtree(task);
 
-  input.addEventListener("change", onChange);
-  input.addEventListener("blur", onBlur);
+      sortAllArraysRecursively(state.tasks);
+      save();
+      render();
+      cleanup();
+    };
 
-  // Try to open picker immediately
-  input.focus();
-  if (typeof input.showPicker === "function") {
-    input.showPicker();
-  } else {
-    input.click();
-  }
+    input.addEventListener("change", onChange);
+    input.addEventListener("blur", onBlur);
+
+    // Try to open picker immediately (must be within the user click gesture).
+    input.focus({ preventScroll: true });
+    if (typeof input.showPicker === "function") {
+      input.showPicker();
+    } else {
+      input.click();
+    }
   }
 
   // ----- Inline editing -----

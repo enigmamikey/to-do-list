@@ -27,7 +27,12 @@ body{
   flex: 1;
   height: 100vh;
   overflow: auto;
+
+  /* existing padding */
   padding: 16px 14px;
+
+  /* allow scrolling past the last task so it can reach the top */
+  padding-bottom: calc(16px + 93vh);
 }
 
 .sidebar{

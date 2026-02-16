@@ -93,6 +93,21 @@ input[type="text"]:focus, input[type="date"]:focus{
   box-shadow: 0 0 5px var(--cyan);
 }
 
+/* Make Chrome's date-picker calendar icon visible on dark backgrounds */
+input[type="date"]{
+  color-scheme: dark;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator{
+  filter: invert(1) drop-shadow(0 0 1px var(--cyan));
+  opacity: 0.9;
+  cursor: pointer;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator:hover{
+  opacity: 1;
+}
+
 .merge-toggle{
   display: inline-flex;
   align-items: center;

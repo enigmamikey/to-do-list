@@ -2,6 +2,12 @@
   "use strict";
 
   const STORAGE_KEY = "outline_todo_v1";
+  const HISTORY_KEY = "outline_todo_history_v1";
+  const MAX_HISTORY = 50;
+
+  let undoStack = []; // array of { t, action, snapshot }
+  let redoStack = [];
+
   let state = { tasks: [] };
 
   const outlineEl = document.getElementById("outline");
@@ -216,6 +222,102 @@
       state = { tasks: [] };
       showError("Stored data was corrupted; started with a fresh list.");
     }
+  }
+
+  function saveHistory() {
+    const payload = { undo: undoStack, redo: redoStack };
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(payload));
+  }
+
+  function loadHistory() {
+    const raw = localStorage.getItem(HISTORY_KEY);
+    if (!raw) return;
+    try {
+      const parsed = JSON.parse(raw);
+      undoStack = Array.isArray(parsed.undo) ? parsed.undo : [];
+      redoStack = Array.isArray(parsed.redo) ? parsed.redo : [];
+    } catch {
+      undoStack = [];
+      redoStack = [];
+    }
+  }
+
+  function resetHistory() {
+    undoStack = [];
+    redoStack = [];
+    saveHistory();
+  }
+
+  function pushUndo(action) {
+    // Save a snapshot BEFORE a change is applied.
+    undoStack.push({
+      t: Date.now(),
+      action: action || "Change",
+      snapshot: JSON.stringify(state)
+    });
+
+    if (undoStack.length > MAX_HISTORY) {
+      undoStack.splice(0, undoStack.length - MAX_HISTORY);
+    }
+
+    // Once you make a new change, redo history is no longer valid.
+    redoStack = [];
+    saveHistory();
+  }
+
+  function applySnapshot(snapshotJson) {
+    const parsed = JSON.parse(snapshotJson);
+    const validated = validateImportedState(parsed);
+    state = validated;
+    save();
+    render();
+  }
+
+  function undo() {
+    if (undoStack.length === 0) {
+      showError("Nothing to undo.");
+      return;
+    }
+
+    // Don’t try to undo mid-edit; it gets messy.
+    if (currentEditingTaskId) {
+      showError("Finish editing first (Enter/Esc), then undo.");
+      return;
+    }
+
+    // Current state goes to redo
+    redoStack.push({
+      t: Date.now(),
+      action: "Redo point",
+      snapshot: JSON.stringify(state)
+    });
+
+    const entry = undoStack.pop();
+    saveHistory();
+    applySnapshot(entry.snapshot);
+  }
+
+  function redo() {
+    if (redoStack.length === 0) {
+      showError("Nothing to redo.");
+      return;
+    }
+
+    if (currentEditingTaskId) {
+      showError("Finish editing first (Enter/Esc), then redo.");
+      return;
+    }
+
+    // Current state becomes a new undo point
+    undoStack.push({
+      t: Date.now(),
+      action: "Undo point",
+      snapshot: JSON.stringify(state)
+    });
+
+    const entry = redoStack.pop();
+    saveHistory();
+    applySnapshot(entry.snapshot);
   }
 
   // ----- Import validation -----
@@ -555,19 +657,27 @@
     input.textContent = wasPlaceholder ? "" : (task.text || "");
 
     const commit = () => {
-      task.text = input.textContent || "";
+      const oldText = task.text || "";
+      const newText = input.textContent || "";
+
+      if (newText !== oldText) {
+        pushUndo("Edit text");
+        task.text = newText;
+        save();
+      }
+
       currentEditingTaskId = null;
 
-      // If user clicked another task while editing, hop directly into it after render
       const nextId = queuedEditTaskId;
       queuedEditTaskId = null;
 
-      save();
       render();
 
       if (nextId) {
         requestAnimationFrame(() => {
-          const li = document.querySelector(`li.task-item[data-task-id="${CSS.escape(nextId)}"]`);
+          const li = document.querySelector(
+            `li.task-item[data-task-id="${CSS.escape(nextId)}"]`
+          );
           if (!li) return;
           const nextTextEl = li.querySelector(".task-text");
           const info = findTaskInfoById(nextId);
@@ -576,48 +686,48 @@
       }
     };
 
-input.addEventListener("keydown", (e) => {
-  if (e.key === "Enter") {
-    e.preventDefault();
-    input.blur();
-    return;
-  }
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        input.blur();
+        return;
+      }
+      if (e.key === "Tab") {
+        e.preventDefault();
+        e.stopPropagation();
 
-if (e.key === "Tab") {
-  e.preventDefault();
-  e.stopPropagation();
+        // Commit text first (as one atomic change) before structure move
+        const oldText = task.text || "";
+        const newText = input.textContent || "";
+        if (newText !== oldText) {
+          pushUndo("Edit text");
+          task.text = newText;
+        }
 
-  // Save current text into the task before moving it
-  task.text = input.textContent || "";
+        // Then indent/outdent as a separate atomic change
+        const ok = e.shiftKey ? outdentByIdNoRender(task.id) : indentByIdNoRender(task.id);
+        if (ok) {
+          pushUndo(e.shiftKey ? "Outdent" : "Indent");
+          save();
+        }
 
-  const ok = e.shiftKey
-    ? outdentByIdNoRender(task.id)
-    : indentByIdNoRender(task.id);
-
-  // Even if move not possible, keep editing the same task
-  pendingEditTaskId = task.id;
-
-  save();
-  render();
-  return;
-}
-
-
-  if (e.key === "Escape") {
-    e.preventDefault(); 
-    currentEditingTaskId = null;
-    queuedEditTaskId = null;
-    render();
-  }
-});
-
+        pendingEditTaskId = task.id;
+        render();
+        return;
+      }
+      if (e.key === "Escape") {
+        e.preventDefault();
+        currentEditingTaskId = null;
+        queuedEditTaskId = null;
+        render();
+      }
+    });
 
     input.addEventListener("blur", commit);
 
     textEl.replaceWith(input);
     input.focus();
 
-    // Place cursor at end
     const range = document.createRange();
     range.selectNodeContents(input);
     range.collapse(false);
@@ -638,32 +748,51 @@ if (e.key === "Tab") {
         render();
         return;
       }
-      task.date = normalizeDateInput(input.value);
-      collapseSubtree(task);
 
-      // Date changed → resort/group
-      sortAllArraysRecursively(state.tasks);
-      enforceGroupOrderingInArray(state.tasks);
+      const oldDate = task.date || null;
+      const newDate = normalizeDateInput(input.value);
 
-      save();
+      if (newDate !== oldDate) {
+        pushUndo("Edit date");
+        task.date = newDate;
+        collapseSubtree(task);
+        sortAllArraysRecursively(state.tasks);
+        enforceGroupOrderingInArray(state.tasks);
+        save();
+      }
+
       render();
     };
 
     input.addEventListener("keydown", (e) => {
-      if (e.key === "Escape") { e.preventDefault(); render(); }
-      if (e.key === "Enter") { e.preventDefault(); input.blur(); }
+      if (e.key === "Escape") {
+        e.preventDefault();
+        render();
+      }
+      if (e.key === "Enter") {
+        e.preventDefault();
+        input.blur();
+      }
     });
-    input.addEventListener("blur", commit);
 
-    // If date becomes null, we'll re-render with no date span (hidden)
+    input.addEventListener("blur", commit);
     dateEl.replaceWith(input);
     input.focus();
   }
 
   // ----- Delete -----
   function deleteTask(taskId) {
+    const exists = findTaskInfoById(taskId);
+    if (!exists) {
+      showError("Task not found.");
+      return;
+    }
+
+    pushUndo("Delete task");
+
     const removed = removeTaskRecursive(state.tasks, taskId);
     if (!removed) showError("Task not found.");
+
     save();
     render();
   }
@@ -763,6 +892,7 @@ if (e.key === "Tab") {
             const toIdx = arr.findIndex((t) => t.id === targetInfo.task.id);
 
             if (fromIdx >= 0 && toIdx >= 0 && fromIdx !== toIdx) {
+              pushUndo("Move task");
               const [moved] = arr.splice(fromIdx, 1);
 
               if (lastHoverLi.dataset.dropPosition === "top") {
@@ -866,10 +996,12 @@ if (e.key === "Tab") {
       const imported = validateImportedState(parsed);
 
       if (mergeImport.checked) {
+        pushUndo("Import merge");
         state.tasks.push(...deepClone(imported.tasks));
         enforceGroupOrderingInArray(state.tasks);
       } else {
         state = imported;
+        resetHistory();
       }
 
       save();
@@ -883,19 +1015,34 @@ if (e.key === "Tab") {
 
   // ----- Keyboard Shortcuts -----
   document.addEventListener("keydown", (e) => {
-    // Ignore when typing in inputs (except Tab/Shift+Tab which we want)
     const target = e.target;
     const isEditable =
       target instanceof HTMLInputElement ||
       target instanceof HTMLTextAreaElement ||
       (target instanceof HTMLElement && target.isContentEditable);
 
-    // We still want Tab shortcuts even while editing text
     const key = e.key;
+    const ctrlOrMeta = e.ctrlKey || e.metaKey;
 
+    // Undo / Redo (only when NOT editing text/date)
+    if (!isEditable && ctrlOrMeta) {
+      // Ctrl+Z / Cmd+Z
+      if (key === "z" || key === "Z") {
+        e.preventDefault();
+        undo();
+        return;
+      }
+      // Ctrl+Y or Ctrl+Shift+Z (common redo)
+      if (key === "y" || key === "Y" || (e.shiftKey && (key === "z" || key === "Z"))) {
+        e.preventDefault();
+        redo();
+        return;
+      }
+    }
+
+    // We still want Tab shortcuts even while editing text
     if (!activeTaskId) return;
 
-    // Tab / Shift+Tab: indent/outdent
     if (key === "Tab") {
       e.preventDefault();
       if (e.shiftKey) outdentActive();
@@ -904,7 +1051,7 @@ if (e.key === "Tab") {
     }
 
     if (isEditable) {
-      // While editing, let keys pass (except Tab handled above)
+      // While editing, let normal keys pass (except Tab handled above)
       return;
     }
 
@@ -913,13 +1060,11 @@ if (e.key === "Tab") {
       addSiblingAfterActive();
       return;
     }
-
     if (key === "ArrowLeft") {
       e.preventDefault();
       collapseActive();
       return;
     }
-
     if (key === "ArrowRight") {
       e.preventDefault();
       expandActive();
@@ -931,9 +1076,9 @@ if (e.key === "Tab") {
     const info = findTaskInfoById(activeTaskId);
     if (!info) return;
 
-    const { task, index, arr } = info;
+    pushUndo("Add task");
 
-    // Inherit the date (your preferred behavior)
+    const { task, index, arr } = info;
     const newTask = makeNewTask(task.date, "");
     arr.splice(index + 1, 0, newTask);
 
@@ -941,8 +1086,7 @@ if (e.key === "Tab") {
     save();
 
     activeTaskId = newTask.id;
-    pendingEditTaskId = newTask.id; // <-- NEW
-
+    pendingEditTaskId = newTask.id;
     render();
   }
 
@@ -965,12 +1109,12 @@ if (e.key === "Tab") {
     const info = findTaskInfoById(activeTaskId);
     if (!info) return;
 
-    const { task, index, parentPath, arr } = info;
-    if (index === 0) return; // no previous sibling to indent into
+    const { task, index, arr } = info;
+    if (index === 0) return;
+
+    pushUndo("Indent");
 
     const prev = arr[index - 1];
-
-    // Remove from current array and add as last subtask of previous sibling
     arr.splice(index, 1);
     prev.subtasks.push(task);
     prev.collapsed = false;
@@ -984,22 +1128,19 @@ if (e.key === "Tab") {
     if (!info) return;
 
     const { task, index, parentPath } = info;
-    if (parentPath.length === 0) return; // already root
+    if (parentPath.length === 0) return;
 
-    // Parent is at parentPath's last index in its parent's array
+    pushUndo("Outdent");
+
     const parentIndex = parentPath[parentPath.length - 1];
     const grandParentPath = parentPath.slice(0, -1);
     const grandArr = getArrayByParentPath(grandParentPath);
     const parentTask = grandArr[parentIndex];
 
-    // Remove from parent's subtasks
     parentTask.subtasks.splice(index, 1);
-
-    // Insert right after the parent in grandparent array
     grandArr.splice(parentIndex + 1, 0, task);
 
     enforceGroupOrderingInArray(grandArr);
-
     save();
     render();
   }
@@ -1041,6 +1182,10 @@ if (e.key === "Tab") {
     const info = findTaskInfoById(activeTaskId);
     if (!info) return;
     if (!info.task.subtasks.length) return;
+    if (info.task.collapsed) return;
+
+    pushUndo("Collapse");
+
     info.task.collapsed = true;
     save();
     render();
@@ -1050,6 +1195,10 @@ if (e.key === "Tab") {
     const info = findTaskInfoById(activeTaskId);
     if (!info) return;
     if (!info.task.subtasks.length) return;
+    if (!info.task.collapsed) return;
+
+    pushUndo("Expand");
+
     info.task.collapsed = false;
     save();
     render();
@@ -1064,6 +1213,7 @@ if (e.key === "Tab") {
 
   // ----- Init -----
   load();
+  loadHistory();
   enforceGroupOrderingInArray(state.tasks);
   save();
   render();

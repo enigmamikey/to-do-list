@@ -84,6 +84,8 @@ The app runs entirely offline.
 This is an actively used personal tool.  
 Features are added cautiously, with priority given to usability and stability over expansion.
 
+Number alignment: Minor visual misalignment may occur with some numbered items. This is cosmetic only and will be addressed in a future layout update.
+
 ---
 
 ## Tech stack

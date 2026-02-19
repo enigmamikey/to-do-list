@@ -1,20 +1,22 @@
 /* ===== Global (old vibe) ===== */
-:root{
+:root {
   --bg: #121212;
   --cyan: #00ffff;
-  --cyan-dim: rgba(0,255,255,.65);
-  --line: rgba(0,255,255,.25);
+  --cyan-dim: rgba(0, 255, 255, .65);
+  --line: rgba(0, 255, 255, .25);
   --date: #7a5cff;
   --panel: #151515;
-  --shadow: 0 2px 5px rgba(0,255,255,0.35);
-  --shadowHover: 0 4px 8px rgba(0,255,255,0.55);
+  --shadow: 0 2px 5px rgba(0, 255, 255, 0.35);
+  --shadowHover: 0 4px 8px rgba(0, 255, 255, 0.55);
   --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
 }
 
-*{ box-sizing:border-box; }
+* {
+  box-sizing: border-box;
+}
 
-body{
-  margin:0;
+body {
+  margin: 0;
   background: var(--bg);
   font-family: Arial, sans-serif;
   color: var(--cyan);
@@ -23,7 +25,7 @@ body{
 }
 
 /* ===== Layout: tasks left, controls right ===== */
-.main{
+.main {
   flex: 1;
   height: 100vh;
   overflow: auto;
@@ -35,31 +37,39 @@ body{
   padding-bottom: calc(16px + 93vh);
 }
 
-.sidebar{
+.sidebar {
   width: 340px;
   max-width: 42vw;
   height: 100vh;
   overflow: auto;
   padding: 16px 14px;
-  border-left: 1px solid rgba(0,255,255,.18);
-  background: linear-gradient(180deg, rgba(18,18,18,.98), rgba(18,18,18,.92));
+  border-left: 1px solid rgba(0, 255, 255, .18);
+  background: linear-gradient(180deg, rgba(18, 18, 18, .98), rgba(18, 18, 18, .92));
 }
 
-h1{
+h1 {
   margin: 0 0 14px 0;
   color: var(--cyan);
 }
 
 /* ===== Controls ===== */
-.controls{
-  display:flex;
+.controls {
+  display: flex;
   align-items: baseline;
   gap: 8px;
   flex-wrap: wrap;
   margin-bottom: 10px;
 }
 
-button{
+/* Base button reset (keep minimal so special buttons can be styled cleanly) */
+button {
+  font: inherit;
+  color: inherit;
+}
+
+/* “Real” buttons in the sidebar/controls */
+.controls button,
+.sidebar button {
   background-color: #222;
   color: var(--cyan);
   border: 1px solid var(--cyan);
@@ -72,13 +82,16 @@ button{
   box-shadow: var(--shadow);
 }
 
-button:hover{
+.controls button:hover,
+.sidebar button:hover {
   background-color: var(--cyan);
   color: #121212;
   box-shadow: var(--shadowHover);
 }
 
-input[type="text"], input[type="date"]{
+/* Inputs */
+input[type="text"],
+input[type="date"] {
   background-color: #222;
   color: var(--cyan);
   border: 1px solid var(--cyan);
@@ -87,105 +100,128 @@ input[type="text"], input[type="date"]{
   border-radius: 5px;
 }
 
-input[type="text"]:focus, input[type="date"]:focus{
+input[type="text"]:focus,
+input[type="date"]:focus {
   outline: none;
   background-color: #111;
   box-shadow: 0 0 5px var(--cyan);
 }
 
 /* Make Chrome's date-picker calendar icon visible on dark backgrounds */
-input[type="date"]{
+input[type="date"] {
   color-scheme: dark;
 }
 
-input[type="date"]::-webkit-calendar-picker-indicator{
+input[type="date"]::-webkit-calendar-picker-indicator {
   filter: invert(1) drop-shadow(0 0 1px var(--cyan));
   opacity: 0.9;
   cursor: pointer;
 }
 
-input[type="date"]::-webkit-calendar-picker-indicator:hover{
+input[type="date"]::-webkit-calendar-picker-indicator:hover {
   opacity: 1;
 }
 
-.merge-toggle{
+/* Small UI bits */
+.merge-toggle {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   font-size: 13px;
-  color: rgba(0,255,255,.75);
+  color: rgba(0, 255, 255, .75);
 }
 
-.help{
+.help {
   margin-top: 14px;
   padding-top: 12px;
-  border-top: 1px solid rgba(0,255,255,.18);
-  color: rgba(0,255,255,.75);
+  border-top: 1px solid rgba(0, 255, 255, .18);
+  color: rgba(0, 255, 255, .75);
   font-size: 13px;
   line-height: 1.45;
 }
-.help-title{
+
+.help-title {
   color: var(--cyan);
   font-weight: bold;
   margin-bottom: 6px;
 }
-.kbd{
+
+.kbd {
   font-family: var(--mono);
-  border: 1px solid rgba(0,255,255,.25);
+  border: 1px solid rgba(0, 255, 255, .25);
   padding: 1px 6px;
   border-radius: 6px;
-  background: rgba(0,255,255,.06);
-  color: rgba(0,255,255,.9);
+  background: rgba(0, 255, 255, .06);
+  color: rgba(0, 255, 255, .9);
 }
 
 /* Status exists for errors only; stays unobtrusive */
-#status{
+#status {
   margin-top: 12px;
   min-height: 16px;
-  color: rgba(255,107,107,.9);
+  color: rgba(255, 107, 107, .9);
   font-size: 13px;
 }
 
 /* ===== Outline ===== */
 /* We do our own numbering, so remove native markers */
-ol{
+ol {
   list-style: none;
   padding-left: 0;
   margin: 0;
 }
 
-.outline-root{
+.outline-root {
   margin-top: 0;
 }
 
 /* Indentation per level (Word-ish) */
-ol.level-1 { margin-left: 0; }
-ol.level-2 { margin-left: 1.5em; }
-ol.level-3 { margin-left: 3em; }
-ol.level-4 { margin-left: 4.5em; }
-ol.level-5 { margin-left: 6em; }
-ol.level-6 { margin-left: 7.5em; }
+ol.level-1 {
+  margin-left: 0;
+}
 
-.task-item{
+ol.level-2 {
+  margin-left: 1.5em;
+}
+
+ol.level-3 {
+  margin-left: 3em;
+}
+
+ol.level-4 {
+  margin-left: 4.5em;
+}
+
+ol.level-5 {
+  margin-left: 6em;
+}
+
+ol.level-6 {
+  margin-left: 7.5em;
+}
+
+.task-item {
   margin: 0;
-  padding-bottom: 6px; /* keeps the visual spacing, but makes it droppable */
+  padding-bottom: 6px;
+  /* keeps the visual spacing, but makes it droppable */
 }
 
 /* One dense row, baseline aligned */
-.task-row{
+.task-row {
   display: flex;
   align-items: baseline;
   gap: 0.35em;
   min-height: 100%;
 }
 
-/* Caret: NO button styling, no background, no border, no shadow */
-.caret{
-  background: transparent !important;
-  border: none !important;
-  box-shadow: none !important;
-  padding: 0 !important;
-  margin: 0 !important;
+/* Caret: no button styling */
+.caret {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  padding: 0;
+  margin: 0;
+
   color: var(--cyan);
   font-weight: bold;
   cursor: pointer;
@@ -194,29 +230,33 @@ ol.level-6 { margin-left: 7.5em; }
   line-height: 1;
   user-select: none;
 }
-.caret.hidden{ visibility: hidden; }
+
+.caret.hidden {
+  visibility: hidden;
+}
 
 /* Our custom marker (number/letter/roman) */
-.marker{
+.marker {
   min-width: 2.0em;
   text-align: right;
   color: var(--cyan);
   user-select: none;
   cursor: grab;
 }
-.marker:active{
+
+.marker:active {
   cursor: grabbing;
 }
 
 /* Date inline (hidden if null – JS won’t render span) */
-.task-date{
+.task-date {
   color: var(--date);
   white-space: nowrap;
   cursor: pointer;
 }
 
 /* Text */
-.task-text{
+.task-text {
   color: var(--cyan);
   cursor: pointer;
   white-space: pre-wrap;
@@ -224,49 +264,72 @@ ol.level-6 { margin-left: 7.5em; }
   line-height: 1.2;
 }
 
+.task-text[data-placeholder="1"] {
+  color: rgba(0, 255, 255, .45);
+  font-style: italic;
+}
+
 /* Actions: hover-only */
-.task-actions{
+.task-actions {
   display: inline-flex;
   gap: 10px;
   margin-left: 10px;
   opacity: 0;
   transition: opacity .12s ease;
 }
-.task-row:hover .task-actions{ opacity: 1; }
 
-.task-actions button{
-  padding: 0 !important;
-  margin: 0 !important;
-  border: none !important;
-  background: transparent !important;
-  box-shadow: none !important;
-  color: var(--cyan-dim) !important;
+.task-row:hover .task-actions {
+  opacity: 1;
+}
+
+/* Action “link buttons” */
+.task-actions button {
+  padding: 0;
+  margin: 0;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+
+  color: var(--cyan-dim);
   text-decoration: underline;
   text-underline-offset: 3px;
-  font-weight: normal !important;
-}
-.task-actions button:hover{
-  color: var(--cyan) !important;
+  font-weight: normal;
+  cursor: pointer;
 }
 
-/* Collapsed subtasks */
-.collapsed > ol{ display:none; }
-
-/* Drag indicators */
-.drag-over-top{ border-top: 3px solid var(--cyan); }
-.drag-over-bottom{ border-bottom: 3px solid var(--cyan); }
-.dragging{ opacity: .55; }
-
-.main-header { margin-bottom: 10px; }
-.main-title { margin: 0; }
-
-.task-text[data-placeholder="1"]{
-  color: rgba(0,255,255,.45);
-  font-style: italic;
+.task-actions button:hover {
+  color: var(--cyan);
 }
 
 /* While dragging, hide action links visually but KEEP their layout space (prevents reflow) */
-.is-dragging .task-actions{
-  opacity: 0 !important;
-  pointer-events: none !important;
+.is-dragging .task-actions {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Collapsed subtasks */
+.collapsed>ol {
+  display: none;
+}
+
+/* Drag indicators */
+.drag-over-top {
+  border-top: 3px solid var(--cyan);
+}
+
+.drag-over-bottom {
+  border-bottom: 3px solid var(--cyan);
+}
+
+.dragging {
+  opacity: .55;
+}
+
+/* Titles */
+.main-header {
+  margin-bottom: 10px;
+}
+
+.main-title {
+  margin: 0;
 }

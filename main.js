@@ -195,11 +195,11 @@
   }
 
   function todayLocalISO() {
-  const d = new Date();
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
+    const d = new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
   }
 
   function sortAllArraysRecursively(tasks) {
@@ -1091,18 +1091,18 @@
   }
 
   function indentOutdentWhileEditing(task, direction) {
-  const info = findTaskInfoById(task.id);
-  if (!info) return;
+    const info = findTaskInfoById(task.id);
+    if (!info) return;
 
-  if (direction === "indent") {
-    indentActiveTask(task.id);
-  } else {
-    outdentActiveTask(task.id);
-  }
+    if (direction === "indent") {
+      indentActiveTask(task.id);
+    } else {
+      outdentActiveTask(task.id);
+    }
 
-  // After structure change + render, re-enter edit mode
-  pendingEditTaskId = task.id;
-  render();
+    // After structure change + render, re-enter edit mode
+    pendingEditTaskId = task.id;
+    render();
   }
 
   function indentActive() {
